@@ -1,4 +1,7 @@
-import { UserRole } from "@prisma/client"
+/**
+ * User roles
+ */
+export type UserRole = "ADMIN" | "COORDINATOR" | "RECRUITER" | "SCRAPER"
 
 /**
  * Extended user type with session information

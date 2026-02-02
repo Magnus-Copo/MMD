@@ -1,9 +1,11 @@
-import NextAuth, { DefaultSession, User as NextAuthUser } from "next-auth"
+import NextAuth, { DefaultSession } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import { compare } from "bcryptjs"
-import { UserRole } from "@prisma/client"
+
+// User roles enum
+export type UserRole = "ADMIN" | "COORDINATOR" | "RECRUITER" | "SCRAPER"
 
 declare module "next-auth" {
   interface Session {
@@ -14,7 +16,10 @@ declare module "next-auth" {
     } & DefaultSession["user"]
   }
 
-  interface User extends NextAuthUser {
+  interface User {
+    id: string
+    email: string
+    name: string
     role: UserRole
     isActive: boolean
   }
@@ -29,7 +34,7 @@ declare module "@auth/core/jwt" {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as any, // Type incompatibility between versions
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -88,16 +93,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = user.role
+        token.role = user.role as UserRole
         token.isActive = user.isActive
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id
-        session.user.role = token.role
-        session.user.isActive = token.isActive
+        session.user.id = token.id as string
+        session.user.role = token.role as UserRole
+        session.user.isActive = token.isActive as boolean
       }
       return session
     },
