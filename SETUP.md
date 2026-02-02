@@ -34,6 +34,37 @@ This project uses **MongoDB** with Prisma ORM.
 net start MongoDB
 ```
 
+### ⚠️ Important: MongoDB Replica Set Required
+
+Prisma requires MongoDB to run as a **replica set** to support referential integrity and relations.
+
+**Configure MongoDB as Replica Set (One-time setup):**
+
+1. **Stop MongoDB service:**
+```bash
+net stop MongoDB
+```
+
+2. **Edit MongoDB config** (`C:\Program Files\MongoDB\Server\<version>\bin\mongod.cfg`):
+```yaml
+replication:
+  replSetName: "rs0"
+```
+
+3. **Restart MongoDB:**
+```bash
+net start MongoDB
+```
+
+4. **Initialize replica set** (run in MongoDB shell or Compass):
+```bash
+mongosh
+```
+Then run:
+```javascript
+rs.initiate()
+```
+
 **Your `.env` file is already configured:**
 ```env
 DATABASE_URL="mongodb://localhost:27017/mmdss"
