@@ -6,7 +6,7 @@ Enterprise staffing operations platform built with Next.js 14+, TypeScript, and 
 
 - **Framework:** Next.js 14+ (App Router, Server Actions)
 - **Language:** TypeScript (strict mode)
-- **Database:** PostgreSQL with Prisma ORM
+- **Database:** MongoDB with Prisma ORM
 - **Authentication:** NextAuth.js v5 (Auth.js) with Role-based Access Control (RBAC)
 - **Styling:** TailwindCSS with Magnus Copo brand colors
 - **UI Components:** shadcn/ui
@@ -50,7 +50,7 @@ Enterprise staffing operations platform built with Next.js 14+, TypeScript, and 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- PostgreSQL database (NeonDB or Supabase recommended)
+- MongoDB installed and running (default port: 27017)
 
 ### Installation
 
@@ -65,7 +65,7 @@ cp .env.example .env
 ```
 
 Edit `.env` and configure:
-- `DATABASE_URL`: Your PostgreSQL connection string
+- `DATABASE_URL`: MongoDB connection string (default: `mongodb://localhost:27017/mmdss`)
 - `NEXTAUTH_SECRET`: Generate with `openssl rand -base64 32`
 - `NEXTAUTH_URL`: Your application URL (http://localhost:3000 for development)
 
@@ -93,7 +93,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 ### Key Principles
 
-1. **UUID Primary Keys:** All tables use UUID for primary keys
+1. **ObjectId Primary Keys:** All tables use MongoDB ObjectId for primary keys
 2. **Soft Deletes:** All entities have `deletedAt` field - no hard deletes
 3. **Audit Logging:** All state changes are logged in `audit_logs` table
 4. **Explicit Relations:** All foreign keys use `onDelete: Restrict` to prevent accidental data loss

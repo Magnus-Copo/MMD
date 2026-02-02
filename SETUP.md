@@ -17,38 +17,31 @@ The following components have been successfully configured:
 9. ✅ Git repository initialized
 10. ✅ Folder structure for components, forms, dashboards, hooks, and types
 
-## 🔧 Required: Database Setup
+## 🔧 Database Setup (MongoDB)
 
-Before running the application, you must set up your PostgreSQL database:
+This project uses **MongoDB** with Prisma ORM.
 
-### Option 1: Using NeonDB (Recommended for Development)
+**Prerequisites:**
+- MongoDB installed and running on your machine
+- Default port: 27017
 
-1. Go to [https://neon.tech](https://neon.tech)
-2. Create a free account
-3. Create a new project
-4. Copy the connection string
-5. Update `.env` file:
+### Starting MongoDB
 
-```env
-DATABASE_URL="postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require"
-NEXTAUTH_SECRET="your-secure-secret-here"
-NEXTAUTH_URL="http://localhost:3000"
+**Windows:**
+```bash
+# MongoDB should be running as a service (starts automatically)
+# Or start manually:
+net start MongoDB
 ```
 
-### Option 2: Using Supabase
-
-1. Go to [https://supabase.com](https://supabase.com)
-2. Create a new project
-3. Go to Project Settings > Database
-4. Copy the Connection String (Transaction mode)
-5. Update `.env` file with the connection string
-
-### Option 3: Local PostgreSQL
-
-If running PostgreSQL locally:
-
+**Your `.env` file is already configured:**
 ```env
-DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/mmdss?schema=public"
+DATABASE_URL="mongodb://localhost:27017/mmdss"
+```
+
+**If MongoDB requires authentication:**
+```env
+DATABASE_URL="mongodb://username:password@localhost:27017/mmdss?authSource=admin"
 ```
 
 ### Generate a Secure NextAuth Secret
@@ -69,7 +62,7 @@ Update `NEXTAUTH_SECRET` in `.env` with the generated value.
 
 ## 🚀 Initialize Database
 
-After configuring your database connection:
+Simply run these commands (SQLite database will be created automatically):
 
 ```bash
 # Push the Prisma schema to your database
@@ -193,10 +186,10 @@ npm run db:seed
 
 ### "Database connection error"
 
-Check that:
-1. Your `DATABASE_URL` in `.env` is correct
-2. Your database server is running (if local)
-3. Your database allows connections from your IP (if remote)
+With SQLite, this is rare. If it happens:
+1. Check that `.env` has `DATABASE_URL="file:./mmdss.db"`
+2. Ensure you have write permissions in the project directory
+3. Try deleting `mmdss.db` and running `npm run db:push` again
 
 ## 📚 Documentation Links
 

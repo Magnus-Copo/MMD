@@ -6,31 +6,26 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 // ============================================
-// ENUMS
+// ENUMS (MongoDB doesn't support enums, use String with validation)
 // ============================================
 
-enum UserRole {
-  ADMIN
-  COORDINATOR
-  RECRUITER
-  SCRAPER
-}
+// UserRole: ADMIN, COORDINATOR, RECRUITER, SCRAPER
 
 // ============================================
 // AUTHENTICATION & USER MANAGEMENT
 // ============================================
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
   password  String
   name      String
-  role      UserRole @default(RECRUITER)
+  role      String   @default("RECRUITER") // ADMIN, COORDINATOR, RECRUITER, SCRAPER
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -51,17 +46,17 @@ model User {
 // ============================================
 
 model Account {
-  id                String  @id @default(uuid()) @db.Uuid
-  userId            String  @db.Uuid
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
 
   createdAt DateTime  @default(now())
@@ -75,9 +70,9 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   sessionToken String   @unique
-  userId       String   @db.Uuid
+  userId       String   @db.ObjectId
   expires      DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -88,7 +83,7 @@ model Session {
 }
 
 model VerificationToken {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
   identifier String
   token      String   @unique
   expires    DateTime
@@ -103,11 +98,11 @@ model VerificationToken {
 // ============================================
 
 model AuditLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
   action    String // CREATE, UPDATE, DELETE, STATUS_CHANGE, etc.
   entity    String // User, Company, Requirement, etc.
-  entityId  String   @db.Uuid
+  entityId  String
   oldValue  Json? // Previous state
   newValue  Json? // New state
   ipAddress String?
@@ -116,8 +111,5 @@ model AuditLog {
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  @@index([userId])
-  @@index([entity, entityId])
-  @@index([createdAt])
   @@map("audit_logs")
 }
