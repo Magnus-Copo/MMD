@@ -27,7 +27,7 @@ export async function loginAction(credentials: z.infer<typeof LoginSchema>) {
     return { success: true, data: null }
   } catch (error) {
     console.error('Login action error:', error)
-    
+
     if (error instanceof AuthError) {
       switch (error.type) {
         case 'CredentialsSignin':
@@ -39,11 +39,15 @@ export async function loginAction(credentials: z.infer<typeof LoginSchema>) {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message }
     }
-    
+
     // Check if error has a message property
     const errorMessage = error instanceof Error ? error.message : "Login failed"
     return { success: false, error: errorMessage }
   }
+}
+
+export async function logoutAction() {
+  await import("@/lib/auth").then(m => m.signOut({ redirect: false }))
 }
 
 export const createUserAction = createProtectedAction(

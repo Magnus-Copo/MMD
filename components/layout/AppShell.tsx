@@ -1,6 +1,6 @@
 'use client'
 
-import { signOut } from 'next-auth/react'
+import { logoutAction } from '@/lib/actions/module1-auth'
 import { Sidebar } from '@/components/layout/AppSidebar'
 import { TopNav } from '@/components/layout/TopNav'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
@@ -15,8 +15,12 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, userRole, userName }: Readonly<AppShellProps>) {
-  const handleSignOut = () => {
-    signOut({ callbackUrl: '/login' })
+  const handleSignOut = async () => {
+    try {
+      await logoutAction()
+    } finally {
+      window.location.href = '/login'
+    }
   }
 
   return (
