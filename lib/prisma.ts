@@ -1,18 +1,17 @@
-import { PrismaClient } from '@prisma/client'
+// This project uses Mongoose instead of Prisma
+// This file is kept for backwards compatibility with imports
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+// Re-export the MongoDB connection
+export { default as connectDB } from '@/lib/db/mongodb'
+
+// Export a dummy prisma object for any legacy code
+export const prisma = {
+  // Add stub methods if needed for backward compatibility
+  $connect: async () => {
+    const connectDB = (await import('@/lib/db/mongodb')).default
+    await connectDB()
+  },
+  $disconnect: async () => {
+    // Mongoose handles connection pooling automatically
+  },
 }
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  // Disable referential integrity for MongoDB standalone (no replica set)
-  // This allows basic operations without transactions
-  __internal: {
-    engine: {
-      connection_limit: 10
-    }
-  }
-})
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma

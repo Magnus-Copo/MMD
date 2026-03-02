@@ -1,0 +1,56 @@
+﻿
+> mmdss@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+- Experiments (use with caution):
+  ┬╖ optimizePackageImports
+  ┬╖ serverActions
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 14.3s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/26) ...
+  Generating static pages using 11 workers (6/26) 
+  Generating static pages using 11 workers (12/26) 
+  Generating static pages using 11 workers (19/26) 
+Γ£ô Generating static pages using 11 workers (26/26) in 976.2ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /admin/privacy
+Γö£ ╞Æ /api/auth/[...nextauth]
+Γö£ ╞Æ /api/cron/daily-alerts
+Γö£ ╞Æ /api/notifications
+Γö£ ╞Æ /api/search
+Γö£ ╞Æ /api/v1/health
+Γö£ ╞Æ /dashboard
+Γö£ ╞Æ /dashboard/admin
+Γö£ ╞Æ /dashboard/candidates
+Γö£ ╞Æ /dashboard/companies
+Γö£ ╞Æ /dashboard/integrations
+Γö£ ╞Æ /dashboard/invoices
+Γö£ ╞Æ /dashboard/invoices/new
+Γö£ ╞Æ /dashboard/leads
+Γö£ ╞Æ /dashboard/mail
+Γö£ ╞Æ /dashboard/placements
+Γö£ ╞Æ /dashboard/placements/[id]
+Γö£ ╞Æ /dashboard/placements/new
+Γö£ ╞Æ /dashboard/reports
+Γö£ ╞Æ /dashboard/requirements
+Γö£ ╞Æ /dashboard/templates
+Γö£ ╞Æ /dashboard/timesheet
+Γö£ ╞Æ /dashboard/users
+Γö£ Γùï /forbidden
+Γöö Γùï /login
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

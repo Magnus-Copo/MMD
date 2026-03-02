@@ -6,7 +6,7 @@ Enterprise staffing operations platform built with Next.js 14+, TypeScript, and 
 
 - **Framework:** Next.js 14+ (App Router, Server Actions)
 - **Language:** TypeScript (strict mode)
-- **Database:** MongoDB with Prisma ORM
+- **Database:** MongoDB with Mongoose ODM
 - **Authentication:** NextAuth.js v5 (Auth.js) with Role-based Access Control (RBAC)
 - **Styling:** TailwindCSS with Magnus Copo brand colors
 - **UI Components:** shadcn/ui
@@ -71,8 +71,7 @@ Edit `.env` and configure:
 
 3. Initialize the database:
 ```bash
-npx prisma generate
-npx prisma db push
+npm run db:seed
 ```
 
 4. Create a default admin user (optional):
@@ -168,9 +167,7 @@ npm run dev          # Start development server
 npm run build        # Build for production
 npm run start        # Start production server
 npm run lint         # Run ESLint
-npx prisma studio    # Open Prisma Studio (database GUI)
-npx prisma generate  # Regenerate Prisma Client
-npx prisma db push   # Push schema changes to database
+npm run db:seed      # Seed database with default users
 ```
 
 ## License

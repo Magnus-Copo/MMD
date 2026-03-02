@@ -1,0 +1,178 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: MagnusCopo
+        - button "Collapse sidebar" [ref=e6] [cursor=pointer]:
+          - img [ref=e7]
+      - navigation [ref=e9]:
+        - link "Dashboard" [ref=e10] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e13]
+          - generic [ref=e16]: Dashboard
+        - link "Companies" [ref=e17] [cursor=pointer]:
+          - /url: /dashboard/companies
+          - img [ref=e20]
+          - generic [ref=e24]: Companies
+        - link "Requirements" [ref=e25] [cursor=pointer]:
+          - /url: /dashboard/requirements
+          - img [ref=e28]
+          - generic [ref=e31]: Requirements
+        - link "Candidates" [ref=e32] [cursor=pointer]:
+          - /url: /dashboard/candidates
+          - img [ref=e35]
+          - generic [ref=e40]: Candidates
+        - link "Leads" [ref=e41] [cursor=pointer]:
+          - /url: /dashboard/leads
+          - img [ref=e44]
+          - generic [ref=e47]: Leads
+        - link "Timesheet" [ref=e48] [cursor=pointer]:
+          - /url: /dashboard/timesheet
+          - img [ref=e51]
+          - generic [ref=e54]: Timesheet
+        - link "Templates" [ref=e55] [cursor=pointer]:
+          - /url: /dashboard/templates
+          - img [ref=e58]
+          - generic [ref=e61]: Templates
+        - link "Reports" [ref=e62] [cursor=pointer]:
+          - /url: /dashboard/reports
+          - img [ref=e65]
+          - generic [ref=e67]: Reports
+        - link "Admin" [ref=e68] [cursor=pointer]:
+          - /url: /dashboard/admin
+          - img [ref=e71]
+          - generic [ref=e73]: Admin
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: System Administrator
+          - paragraph [ref=e77]: admin
+        - button "Sign out" [ref=e78] [cursor=pointer]:
+          - img [ref=e79]
+          - generic [ref=e82]: Sign Out
+    - generic [ref=e83]:
+      - banner [ref=e84]:
+        - button "Open global search" [ref=e85] [cursor=pointer]:
+          - img [ref=e86]
+          - generic [ref=e89]: Search companies, requirements, candidates...
+          - generic [ref=e90]:
+            - img [ref=e91]
+            - text: K
+        - generic [ref=e93]:
+          - button "Notifications" [ref=e95] [cursor=pointer]:
+            - img [ref=e96]
+          - generic [ref=e99]:
+            - generic [ref=e100]: S
+            - generic [ref=e101]:
+              - paragraph [ref=e102]: System Administrator
+              - paragraph [ref=e103]: admin
+      - main [ref=e104]:
+        - navigation "Breadcrumb" [ref=e105]:
+          - link [ref=e106] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e107]
+          - generic [ref=e110]:
+            - img [ref=e111]
+            - link "Dashboard" [ref=e113] [cursor=pointer]:
+              - /url: /dashboard
+          - generic [ref=e114]:
+            - img [ref=e115]
+            - generic [ref=e117]: Leads
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - img [ref=e122]
+              - generic [ref=e126]:
+                - heading "Leads" [level=1] [ref=e127]
+                - paragraph [ref=e128]: Manage scraped leads and conversions
+            - generic [ref=e129]:
+              - button "Import Leads" [ref=e130] [cursor=pointer]:
+                - img [ref=e132]
+                - text: Import Leads
+              - button "New Lead" [ref=e135] [cursor=pointer]:
+                - img [ref=e137]
+                - text: New Lead
+          - generic [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - paragraph [ref=e141]: LinkedIn
+                - img [ref=e142]
+              - paragraph [ref=e144]: 0%
+              - paragraph [ref=e145]: "Avg convert: 0 hrs"
+            - generic [ref=e146]:
+              - generic [ref=e147]:
+                - paragraph [ref=e148]: Naukri
+                - img [ref=e149]
+              - paragraph [ref=e151]: 0%
+              - paragraph [ref=e152]: "Avg convert: 0 hrs"
+            - generic [ref=e153]:
+              - generic [ref=e154]:
+                - paragraph [ref=e155]: AngelList
+                - img [ref=e156]
+              - paragraph [ref=e158]: 0%
+              - paragraph [ref=e159]: "Avg convert: 0 hrs"
+          - generic [ref=e160]:
+            - generic [ref=e162]:
+              - img [ref=e164]
+              - searchbox "Search by company, contact, source..." [ref=e167]
+            - combobox [ref=e169] [cursor=pointer]:
+              - option "All Statuses" [selected]
+              - option "NEW"
+              - option "CONTACTED"
+              - option "QUALIFIED"
+              - option "CONVERTED"
+              - option "REJECTED"
+              - option "STALLED"
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - generic [ref=e172]:
+                - generic [ref=e173]:
+                  - generic [ref=e175]: NEW
+                  - generic [ref=e176]: "1"
+                - generic [ref=e178]:
+                  - button [ref=e179]:
+                    - img [ref=e180]
+                  - generic [ref=e187]:
+                    - generic [ref=e188]:
+                      - img [ref=e189]
+                      - generic [ref=e193]: LinkedIn
+                    - heading "SearchTest_Company_1770109943570" [level=4] [ref=e194]
+                  - generic [ref=e195]:
+                    - generic [ref=e196]: 70% Match
+                    - generic [ref=e197]:
+                      - button "Edit Lead" [ref=e198] [cursor=pointer]:
+                        - img [ref=e199]
+                      - button "Convert to Company" [ref=e203] [cursor=pointer]:
+                        - img [ref=e204]
+              - generic [ref=e206]:
+                - generic [ref=e207]:
+                  - generic [ref=e209]: CONTACTED
+                  - generic [ref=e210]: "0"
+                - generic [ref=e213]: Empty
+              - generic [ref=e214]:
+                - generic [ref=e215]:
+                  - generic [ref=e217]: QUALIFIED
+                  - generic [ref=e218]: "0"
+                - generic [ref=e221]: Empty
+              - generic [ref=e222]:
+                - generic [ref=e223]:
+                  - generic [ref=e225]: CONVERTED
+                  - generic [ref=e226]: "0"
+                - generic [ref=e229]: Empty
+              - generic [ref=e230]:
+                - generic [ref=e231]:
+                  - generic [ref=e233]: REJECTED
+                  - generic [ref=e234]: "0"
+                - generic [ref=e237]: Empty
+              - generic [ref=e238]:
+                - generic [ref=e239]:
+                  - generic [ref=e241]: STALLED
+                  - generic [ref=e242]: "0"
+                - generic [ref=e245]: Empty
+            - status [ref=e246]
+  - button "Open Next.js Dev Tools" [ref=e252] [cursor=pointer]:
+    - img [ref=e253]
+  - alert [ref=e256]
+```

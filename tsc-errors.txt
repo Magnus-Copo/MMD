@@ -1,0 +1,32 @@
+﻿app/(dashboard)/dashboard/companies/page.tsx(357,26): error TS2554: Expected 1 arguments, but got 0.
+app/(dashboard)/dashboard/leads/page.tsx(202,9): error TS2554: Expected 1 arguments, but got 0.
+app/(dashboard)/dashboard/leads/page.tsx(203,9): error TS2554: Expected 1 arguments, but got 0.
+app/(dashboard)/dashboard/leads/page.tsx(307,37): error TS2345: Argument of type 'string' is not assignable to parameter of type '{ leadId: string; }'.
+app/(dashboard)/dashboard/placements/[id]/page.tsx(358,32): error TS2304: Cannot find name 'setConfirmOpen'.
+app/(dashboard)/dashboard/templates/page.tsx(51,26): error TS2554: Expected 1 arguments, but got 0.
+app/(dashboard)/dashboard/templates/page.tsx(123,37): error TS2345: Argument of type '(prev: Template[]) => (Template | undefined)[]' is not assignable to parameter of type 'SetStateAction<Template[]>'.
+  Type '(prev: Template[]) => (Template | undefined)[]' is not assignable to type '(prevState: Template[]) => Template[]'.
+    Type '(Template | undefined)[]' is not assignable to type 'Template[]'.
+      Type 'Template | undefined' is not assignable to type 'Template'.
+        Type 'undefined' is not assignable to type 'Template'.
+app/(dashboard)/dashboard/templates/page.tsx(137,20): error TS2345: Argument of type '(prev: Template[]) => (Template | undefined)[]' is not assignable to parameter of type 'SetStateAction<Template[]>'.
+  Type '(prev: Template[]) => (Template | undefined)[]' is not assignable to type '(prevState: Template[]) => Template[]'.
+    Type '(Template | undefined)[]' is not assignable to type 'Template[]'.
+      Type 'Template | undefined' is not assignable to type 'Template'.
+        Type 'undefined' is not assignable to type 'Template'.
+app/(dashboard)/dashboard/timesheet/page.tsx(256,26): error TS2554: Expected 1 arguments, but got 0.
+app/(dashboard)/dashboard/timesheet/page.tsx(399,42): error TS2345: Argument of type 'string' is not assignable to parameter of type '{ id: string; }'.
+app/(dashboard)/dashboard/timesheet/page.tsx(412,43): error TS2345: Argument of type 'string' is not assignable to parameter of type '{ id: string; }'.
+components/automation/AutomationPanel.tsx(44,48): error TS18048: 'result.data' is possibly 'undefined'.
+components/reports/ReportBuilder.tsx(128,39): error TS2339: Property 'csv' does not exist on type 'ActionState<unknown>'.
+components/reports/ReportBuilder.tsx(129,36): error TS2339: Property 'csv' does not exist on type 'ActionState<unknown>'.
+lib/actions/module7-activity.ts(12,7): error TS2345: Argument of type '{ summary: string; type: "EMAIL" | "CALL" | "MEETING" | "INTERVIEW" | "WHATSAPP" | "STATUS_CHANGE" | "FOLLOW_UP"; requirementId: string; metadata?: Record<string, any> | undefined; outcome?: "PENDING" | ... 3 more ... | undefined; nextFollowUpDate?: Date | undefined; }' is not assignable to parameter of type '{ summary: string; type: "EMAIL" | "CALL" | "MEETING" | "INTERVIEW" | "WHATSAPP" | "STATUS_CHANGE" | "FOLLOW_UP"; requirementId: string; outcome: "PENDING" | "POSITIVE" | "NEGATIVE" | "NEUTRAL"; metadata?: Record<...> | undefined; nextFollowUpDate?: Date | undefined; }'.
+  Types of property 'outcome' are incompatible.
+    Type '"PENDING" | "POSITIVE" | "NEGATIVE" | "NEUTRAL" | undefined' is not assignable to type '"PENDING" | "POSITIVE" | "NEGATIVE" | "NEUTRAL"'.
+      Type 'undefined' is not assignable to type '"PENDING" | "POSITIVE" | "NEGATIVE" | "NEUTRAL"'.
+lib/actions/module7-activity.ts(24,7): error TS2345: Argument of type '{ daysStale?: number | undefined; } | undefined' is not assignable to parameter of type '{ daysStale: number; } | undefined'.
+  Type '{ daysStale?: number | undefined; }' is not assignable to type '{ daysStale: number; }'.
+    Types of property 'daysStale' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+lib/actions/requirements.ts(275,43): error TS2339: Property 'nextFollowUpDate' does not exist on type 'Document<unknown, {}, IRequirement, {}, {}> & IRequirement & Required<{ _id: ObjectId; }> & { __v: number; }'.

@@ -1,5 +1,17 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+import { Types } from "mongoose"
+import {
+  AdminDashboard,
+  CoordinatorDashboard,
+  RecruiterDashboard,
+  ScraperDashboard
+} from "./_components"
+// ... imports
+import { getDashboardMetrics, getRecruiterDashboard } from "@/lib/actions/dashboard"
+import { getEnhancedLeadMetrics } from "@/lib/actions/module9-leads"
+import { AlertCircle } from "lucide-react"
+import { PageTransition } from "@/components/layout/PageTransition"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -8,64 +20,103 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h1 className="text-3xl font-bold text-primary mb-4">Dashboard</h1>
-          
-          <div className="space-y-4">
-            <div className="p-4 bg-secondary rounded-md">
-              <h2 className="text-xl font-semibold text-foreground mb-2">Welcome, {session.user.name}</h2>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p><span className="font-medium text-foreground">Email:</span> {session.user.email}</p>
-                <p><span className="font-medium text-foreground">Role:</span> <span className="px-2 py-1 bg-primary/20 text-primary rounded">{session.user.role}</span></p>
-                <p><span className="font-medium text-foreground">Status:</span> <span className={`px-2 py-1 rounded ${session.user.isActive ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>{session.user.isActive ? 'Active' : 'Inactive'}</span></p>
-              </div>
-            </div>
+  const role = session.user.role || 'RECRUITER'
+  const userId = session.user.id
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-secondary border border-border rounded-md">
-                <h3 className="text-lg font-semibold text-foreground">Companies</h3>
-                <p className="text-2xl font-bold text-primary mt-2">0</p>
-              </div>
-              
-              <div className="p-4 bg-secondary border border-border rounded-md">
-                <h3 className="text-lg font-semibold text-foreground">Requirements</h3>
-                <p className="text-2xl font-bold text-accent mt-2">0</p>
-              </div>
-              
-              <div className="p-4 bg-secondary border border-border rounded-md">
-                <h3 className="text-lg font-semibold text-foreground">Candidates</h3>
-                <p className="text-2xl font-bold text-success mt-2">0</p>
-              </div>
-              
-              <div className="p-4 bg-secondary border border-border rounded-md">
-                <h3 className="text-lg font-semibold text-foreground">Placements</h3>
-                <p className="text-2xl font-bold text-warning mt-2">0</p>
-              </div>
-            </div>
+  try {
+    // Get dashboard data based on role
+    const user = {
+      _id: new Types.ObjectId(userId),
+      role: role as 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER',
+      assignedGroup: null,
+    }
 
-            <div className="p-4 bg-secondary/50 border border-border rounded-md">
-              <h3 className="text-lg font-semibold text-foreground mb-2">System Status</h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Database:</span>
-                  <span className="px-2 py-1 bg-success/20 text-success rounded text-sm">Connected</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Authentication:</span>
-                  <span className="px-2 py-1 bg-success/20 text-success rounded text-sm">Active</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Role:</span>
-                  <span className="px-2 py-1 bg-primary/20 text-primary rounded text-sm">{session.user.role} Access</span>
-                </div>
-              </div>
+    const metrics = await getDashboardMetrics(user)
+
+    if ((['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any))) {
+      return (
+        <PageTransition>
+          <AdminDashboard metrics={metrics} userName={session.user.name || 'Admin'} />
+        </PageTransition>
+      )
+    }
+
+    if (role === 'COORDINATOR') {
+      return (
+        <PageTransition>
+          <CoordinatorDashboard metrics={metrics} userName={session.user.name || 'Coordinator'} />
+        </PageTransition>
+      )
+    }
+
+    if (role === 'SCRAPER') {
+      const enhancedMetricsRes = await getEnhancedLeadMetrics({})
+      const enhancedMetrics = enhancedMetricsRes?.data || undefined
+
+      return (
+        <PageTransition>
+          <ScraperDashboard userName={session.user.name || 'Scraper'} metrics={enhancedMetrics} />
+        </PageTransition>
+      )
+    }
+
+    // Recruiter dashboard
+    const recruiterData = await getRecruiterDashboard(userId)
+    return (
+      <PageTransition>
+        <RecruiterDashboard
+          metrics={metrics}
+          recruiterData={recruiterData}
+          userName={session.user.name || 'Recruiter'}
+        />
+      </PageTransition>
+    )
+  } catch (error) {
+    console.error('Dashboard error:', error)
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)] px-4">
+        <div className="max-w-md w-full bg-white border border-red-200 rounded-xl p-6 space-y-4 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-50">
+              <AlertCircle className="h-6 w-6 text-red-500" />
             </div>
+            <div>
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Dashboard Error</h2>
+              <p className="text-sm text-[var(--foreground-muted)]">Unable to load dashboard</p>
+            </div>
+          </div>
+
+          <div className="bg-[var(--surface-hover)] border border-[var(--border)] rounded-lg p-4">
+            <p className="text-sm text-[var(--foreground)] mb-2">
+              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+            </p>
+            <p className="text-xs text-[var(--foreground-muted)]">
+              Please check:
+            </p>
+            <ul className="text-xs text-[var(--foreground-muted)] list-disc list-inside mt-2 space-y-1">
+              <li>MongoDB is running (check service status)</li>
+              <li>Database has been seeded with users (run: npm run db:seed)</li>
+              <li>DATABASE_URL is correctly set in .env</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3">
+            <a
+              href="/login"
+              className="flex-1 px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors text-center text-sm font-medium"
+            >
+              Back to Login
+            </a>
+            <a
+              href="/dashboard"
+              className="flex-1 px-4 py-2 bg-[var(--surface-hover)] text-[var(--foreground)] rounded-lg hover:bg-[var(--surface-active)] transition-colors text-sm font-medium border border-[var(--border)] text-center"
+            >
+              Retry
+            </a>
           </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 }

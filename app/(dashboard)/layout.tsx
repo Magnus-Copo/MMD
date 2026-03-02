@@ -1,7 +1,23 @@
-export default function DashboardLayout({
+import { redirect } from 'next/navigation'
+import { auth } from '@/lib/auth'
+import { AppShell } from '@/components/layout'
+
+export default async function DashboardLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
-  return <>{children}</>
+}>) {
+  const session = await auth()
+
+  if (!session?.user) {
+    redirect('/login')
+  }
+
+  const userRole = (session.user.role || 'RECRUITER') as 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER'
+
+  return (
+    <AppShell userRole={userRole} userName={session.user.name || undefined}>
+      {children}
+    </AppShell>
+  )
 }

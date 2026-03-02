@@ -1,7 +1,7 @@
 /**
  * User roles
  */
-export type UserRole = "ADMIN" | "COORDINATOR" | "RECRUITER" | "SCRAPER"
+export type UserRole = "SUPER_ADMIN" | "ADMIN" | "COORDINATOR" | "RECRUITER" | "SCRAPER"
 
 /**
  * Extended user type with session information
@@ -17,7 +17,7 @@ export interface SessionUser {
 /**
  * Server action response wrapper
  */
-export type ActionResponse<T = unknown> = 
+export type ActionResponse<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string }
 
@@ -51,7 +51,7 @@ export interface MmdIdComponents {
 /**
  * Audit log action types
  */
-export type AuditAction = 
+export type AuditAction =
   | "CREATE"
   | "UPDATE"
   | "DELETE"
@@ -64,7 +64,7 @@ export type AuditAction =
 /**
  * Entity types for audit logging
  */
-export type EntityType = 
+export type EntityType =
   | "User"
   | "Company"
   | "Requirement"
