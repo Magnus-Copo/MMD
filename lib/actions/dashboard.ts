@@ -75,10 +75,10 @@ export async function getDashboardMetrics(user: RoleUser) {
     status: 'AWAITING_JD',
   })
 
-  // Today's follow-ups
+  // Today's follow-ups (including overdue ones up to today)
   const followUpsToday = await Activity.countDocuments({
     ...activityBaseFilter,
-    nextFollowUpDate: { $gte: todayStart, $lte: todayEnd },
+    nextFollowUpDate: { $lte: todayEnd },
     isCompleted: false,
   })
 
@@ -86,24 +86,28 @@ export async function getDashboardMetrics(user: RoleUser) {
   const pendingActions = stalledCount + missingJDCount + followUpsToday
 
   // Pipeline conversion (month-to-date)
-  const monthCandidates = await Candidate.aggregate([
-    {
-      $match: {
-        deletedAt: null,
-        appliedAt: { $gte: monthStart },
+  let monthCandidates = []
+  try {
+    monthCandidates = await Candidate.aggregate([
+      {
+        $match: {
+          deletedAt: null,
+        },
       },
-    },
-    {
-      $group: {
-        _id: '$status',
-        count: { $sum: 1 },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
       },
-    },
-  ])
+    ])
+  } catch (e) {
+    console.error('Conversion aggregate error:', e)
+  }
 
-  const applied = monthCandidates.find((c) => c._id === 'APPLIED')?.count || 0
+  const totalApplied = monthCandidates.reduce((acc, c) => acc + c.count, 0)
   const joined = monthCandidates.find((c) => c._id === 'JOINED')?.count || 0
-  const conversionRate = applied > 0 ? Math.round((joined / applied) * 100) : 0
+  const conversionRate = totalApplied > 0 ? Math.round((joined / totalApplied) * 100) : 0
 
   // Requirements by status for funnel
   const reqByStatus = await Requirement.aggregate([

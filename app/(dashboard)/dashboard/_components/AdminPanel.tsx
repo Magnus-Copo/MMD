@@ -170,7 +170,7 @@ export function AdminDashboard({ metrics, userName }: Readonly<AdminDashboardPro
           <Link href="/dashboard/reports" className="block bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-white/90 hover:bg-white transition-all duration-300 group cursor-pointer">
             <div className="flex items-center justify-between">
               <Target className="h-5 w-5 text-brand-700" />
-              <span className="text-xs text-slate-400 font-medium">MTD</span>
+              <span className="text-xs text-slate-400 font-medium">Overall</span>
             </div>
             <p className="text-4xl font-bold mt-3 tabular-nums text-slate-900 group-hover:scale-105 transition-transform origin-left">{kpis.conversionRate}%</p>
             <p className="text-slate-500 text-sm font-medium mt-1">Conversion</p>
@@ -433,7 +433,7 @@ export function AdminDashboard({ metrics, userName }: Readonly<AdminDashboardPro
                     <span className="text-sm font-semibold text-brand-700">Conversion Rate</span>
                   </div>
                   <p className="text-4xl font-bold text-brand-900 tabular-nums">{kpis.conversionRate}%</p>
-                  <p className="text-xs text-brand-600 mt-2 font-medium">Month-to-date</p>
+                  <p className="text-xs text-brand-600 mt-2 font-medium">Overall Pipeline</p>
                 </Link>
 
                 <Link href="/dashboard/requirements?status=ACTIVE" className="block p-5 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200/60 hover:shadow-lg transition-shadow hover:scale-[1.02] duration-200">

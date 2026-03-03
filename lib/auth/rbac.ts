@@ -35,7 +35,7 @@ export function applyLeadRBAC(
     where.assignedTo = user._id?.toString()
   }
 
-  // ADMIN can see all leads (no additional filters)
+  // ADMIN and SUPER_ADMIN can see all leads (no additional filters)
 
   // Always exclude soft-deleted leads
   if (where.deletedAt === undefined) {
@@ -60,7 +60,7 @@ export function canModifyLead(
 ): boolean {
   if (lead.deletedAt) return false // Cannot modify deleted leads
 
-  if (user.role === 'ADMIN' || user.role === 'COORDINATOR') {
+  if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'COORDINATOR') {
     return true
   }
 
@@ -73,18 +73,18 @@ export function canModifyLead(
 
 /**
  * Check if a user can convert a lead to a company.
- * Only ADMIN and COORDINATOR can convert leads.
+ * Only ADMIN (and SUPER_ADMIN) and COORDINATOR can convert leads.
  */
 export function canConvertLead(user: { role: IUser['role'] }): boolean {
-  return user.role === 'ADMIN' || user.role === 'COORDINATOR'
+  return user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'COORDINATOR'
 }
 
 /**
  * Check if a user can delete a lead.
- * Only ADMIN and COORDINATOR can delete leads.
+ * Only ADMIN and SUPER_ADMIN can delete leads.
  */
 export function canDeleteLead(user: { role: IUser['role'] }): boolean {
-  return user.role === 'ADMIN'
+  return user.role === 'SUPER_ADMIN' || user.role === 'ADMIN'
 }
 
 export function applyRequirementRBAC(user: Pick<IUser, 'role' | '_id'> & { assignedGroup?: string | null }, base: RoleAwareFilter<IRequirement> = {}) {

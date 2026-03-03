@@ -92,7 +92,8 @@ interface BackendCandidate {
   createdAt?: string
   requirement?: {
     _id: string
-    title: string
+    title?: string
+    jobTitle?: string
     company?: string
     companyDetails?: {
       name: string
@@ -129,7 +130,7 @@ function transformCandidate(bc: BackendCandidate): Candidate {
     email: bc.email,
     phone: bc.phone,
     location: bc.requirement?.companyDetails?.location || 'Not specified',
-    role: bc.requirement?.title || 'Unknown Role',
+    role: bc.requirement?.jobTitle || bc.requirement?.title || 'General Application',
     status: statusMap[bc.status],
     source: 'Database', // Backend doesn't track source, default value
     experience: bc.yearsExperience ?? 0,
@@ -143,7 +144,7 @@ function transformCandidate(bc: BackendCandidate): Candidate {
     resumeUrl: bc.resumeUrl,
     notes: bc.college ? `College: ${bc.college}` : undefined,
     requirementId: bc.requirementId,
-    requirementTitle: bc.requirement?.title,
+    requirementTitle: bc.requirement?.jobTitle || bc.requirement?.title,
     companyName: bc.requirement?.company || bc.requirement?.companyDetails?.name,
   }
 }
@@ -275,7 +276,7 @@ function CandidateCard({
             <>
               <button
                 type="button"
-                className="fixed inset-0 z-10 cursor-default bg-transparent border-none"
+                className="fixed inset-0 z-10 w-full h-full cursor-default bg-transparent border-none"
                 aria-label="Close menu"
                 onClick={() => setMenuOpen(false)}
               />
@@ -335,77 +336,71 @@ function CandidateCard({
         </div>
       </div>
 
-      <div className="flex items-start gap-4 mb-6">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-violet-500/30">
+      <div className="flex items-start gap-3 mb-4">
+        {/* Candidate Avatar (Symbol) */}
+        <div className="relative flex-shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-violet-500/30">
             {candidate.name
               .split(' ')
               .map((n) => n[0])
               .join('')
               .slice(0, 2)}
           </div>
-          <button
-            onClick={onToggleStar}
-            className={cn(
-              'absolute -bottom-2 -right-2 p-1.5 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-100 dark:border-slate-700 transition-transform hover:scale-110',
-              candidate.isStarred ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'
-            )}
-          >
-            <Star className={cn('w-3.5 h-3.5', candidate.isStarred && 'fill-current')} />
-          </button>
+          {candidate.isStarred && (
+            <div className="absolute -bottom-1 -right-1 p-1 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700">
+              <Star className="w-3 h-3 text-amber-500 fill-current" />
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 min-w-0 pt-1">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <StatusBadge status={candidate.status} />
+          </div>
           <h3 className="font-bold text-lg text-slate-900 dark:text-white truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
             {candidate.name}
           </h3>
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-1">
+          <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mt-1">
             <Briefcase className="w-3.5 h-3.5" />
-            <span className="truncate">{candidate.role}</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-            <Clock className="w-3 h-3" />
-            <span>Applied {new Date(candidate.appliedDate).toLocaleDateString('en-US')}</span>
+            <span className="font-medium truncate text-emerald-600 dark:text-emerald-400">{candidate.role}</span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 mb-6">
-        <StatusBadge status={candidate.status} />
-        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-          {candidate.source}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+          Source: {candidate.source}
+        </span>
+        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+          <Clock className="w-3 h-3" />
+          {new Date(candidate.appliedDate).toLocaleDateString('en-US')}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6 p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
-        <div className="space-y-1">
-          <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Location</span>
-          <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="p-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800/50">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
             <MapPin className="w-3.5 h-3.5 text-violet-500" />
-            <span className="truncate">{candidate.location}</span>
+            <span className="text-xs uppercase tracking-wide font-semibold">Location</span>
           </div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white truncate" title={candidate.location}>{candidate.location}</p>
         </div>
-        <div className="space-y-1">
-          <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Experience</span>
-          <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <Briefcase className="w-3.5 h-3.5 text-violet-500" />
-            <span>{candidate.experience} years</span>
+        <div className="p-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800/50">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+            <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-xs uppercase tracking-wide font-semibold">Experience</span>
           </div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{candidate.experience} years</p>
         </div>
       </div>
 
-      <div className="space-y-3 mb-6">
-        <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Top Skills</span>
-        <div className="flex flex-wrap gap-2">
-          {candidate.skills.slice(0, 3).map((skill) => (
-            <SkillBadge key={skill.name} skill={skill} />
-          ))}
-          {candidate.skills.length > 3 && (
-            <span className="px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">
-              +{candidate.skills.length - 3}
-            </span>
-          )}
-        </div>
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {candidate.skills.slice(0, 3).map((skill) => (
+          <span key={skill.name} className="px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{skill.name}</span>
+        ))}
+        {candidate.skills.length > 3 && (
+          <span className="px-2 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700">+{candidate.skills.length - 3}</span>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800/50">
@@ -482,10 +477,10 @@ export default function CandidatesPage() {
       const result = await getRequirements({})
       if (result.success && result.data) {
         setAvailableRequirements(
-          result.data.map((r: { id: string; title: string; company: string }) => ({
-            id: r.id,
-            title: r.title,
-            company: r.company,
+          result.data.map((r: { _id?: string; id?: string; title?: string; jobTitle?: string; company?: string }) => ({
+            id: r.id || r._id || '',
+            title: r.jobTitle || r.title || 'Unknown Role',
+            company: r.company || '',
           }))
         )
       }
@@ -804,6 +799,7 @@ export default function CandidatesPage() {
         <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full md:w-auto">
           <div className="relative">
             <SearchInput
+              id="candidate-search"
               placeholder="Search candidates..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -812,6 +808,7 @@ export default function CandidatesPage() {
             />
           </div>
           <Select
+            id="candidate-status-filter"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             options={[
@@ -826,6 +823,7 @@ export default function CandidatesPage() {
             className="sm:w-48 shadow-sm border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 rounded-xl"
           />
           <Select
+            id="candidate-source-filter"
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
             options={[
@@ -838,6 +836,7 @@ export default function CandidatesPage() {
         <div className="flex items-center gap-3">
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2 hidden md:block"></div>
           <Select
+            id="candidate-sort-by"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             options={[
@@ -876,7 +875,7 @@ export default function CandidatesPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
           {filteredCandidates.map((candidate) => (
             <CandidateCard
               key={candidate.id}
