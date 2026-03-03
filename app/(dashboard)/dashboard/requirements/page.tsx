@@ -11,7 +11,7 @@ import {
   XCircle,
   Pause,
   MapPin,
-  DollarSign,
+  IndianRupee,
   Users,
   MoreHorizontal,
   Eye,
@@ -326,10 +326,12 @@ function RequirementCard({
         {!hideFinancials && (
           <div className="p-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800/50">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+              <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
               <span className="text-xs uppercase tracking-wide font-semibold">Budget</span>
             </div>
-            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{requirement.budget || 'N/A'}</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+              {requirement.budget ? requirement.budget.replace(/\$/g, '₹') : 'N/A'}
+            </p>
           </div>
         )}
       </div>
@@ -410,7 +412,6 @@ function RequirementCard({
   )
 }
 
-// Requirement Drawer with Automation Panel
 function RequirementDrawer({
   requirement,
   isOpen,
@@ -423,50 +424,55 @@ function RequirementDrawer({
   if (!requirement) return null
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={requirement.title} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Requirement Case File" size="xl">
       <div className="space-y-6">
         {/* Header Info */}
-        <div className="flex items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-mono text-xl font-bold shadow-lg shadow-indigo-500/20">
-            {requirement.mmdId.split('-').pop()}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{requirement.mmdId}</span>
-              <PriorityBadge priority={requirement.priority} />
+        <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800/50 pb-6">
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-mono text-xl font-bold shadow-lg shadow-indigo-500/30">
+              {requirement.mmdId.split('-').pop()}
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{requirement.title}</h2>
-            <div className="flex items-center gap-3 mt-2">
-              <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 text-sm font-medium">
-                <Building2 className="w-4 h-4" />
-                {requirement.company}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-mono text-[10px] text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800 px-2 py-0.5 rounded-full font-medium tracking-wide">
+                  {requirement.mmdId}
+                </span>
+                <PriorityBadge priority={requirement.priority} />
+                <StatusBadge status={requirement.status} />
               </div>
-              <StatusBadge status={requirement.status} />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{requirement.title}</h2>
             </div>
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium mb-1">
+              <Building2 className="w-4 h-4" />
+              <span>{requirement.company}</span>
+            </div>
+            <p className="text-xs text-slate-400">Created on: {new Date().toLocaleDateString('en-US')}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Left Column: Details */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="md:col-span-2 space-y-6">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-5 shadow-sm">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-2 text-sm">
                 <Filter className="w-4 h-4 text-violet-500" />
-                Description
+                Full Description
               </h3>
               <div className="prose prose-sm prose-slate dark:prose-invert max-w-none text-slate-600 dark:text-slate-300">
-                {requirement.description || 'No description provided.'}
+                {requirement.description || 'No detailed description provided.'}
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-5 shadow-sm">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-2 text-sm">
                 <Target className="w-4 h-4 text-violet-500" />
                 Required Skills
               </h3>
               <div className="flex flex-wrap gap-2">
                 {requirement.skills.map(skill => (
-                  <span key={skill} className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium border border-slate-200 dark:border-slate-700">
+                  <span key={skill} className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium border border-slate-200 dark:border-slate-700">
                     {skill}
                   </span>
                 ))}
@@ -474,23 +480,12 @@ function RequirementDrawer({
             </div>
           </div>
 
-          {/* Right Column: Automation & Meta */}
+          {/* Right Column: Key Metrics & Details */}
           <div className="space-y-6">
-            {/* Automation Panel Integration */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-                AI Automation
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-5 shadow-sm space-y-4">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-2 text-sm">
+                Overview Config
               </h3>
-              <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-                <AutomationPanel
-                  requirementId={requirement.id}
-                  content={{}}
-                />
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Location</label>
                 <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium">
@@ -500,24 +495,42 @@ function RequirementDrawer({
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Budget</label>
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium">
-                  <DollarSign className="w-4 h-4 text-slate-400" />
-                  {requirement.budget || 'Not specified'}
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Budget Setup</label>
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <IndianRupee className="w-4 h-4" />
+                  {requirement.budget ? requirement.budget.replace(/\$/g, '₹') : 'Not specified'}
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Deadline</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Closure Deadline</label>
                 <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  {requirement.deadline ? new Date(requirement.deadline).toLocaleDateString('en-US') : 'None'}
+                  <Clock className="w-4 h-4 text-rose-400" />
+                  {requirement.deadline ? new Date(requirement.deadline).toLocaleDateString('en-US') : 'Open Ended'}
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-5 shadow-sm space-y-4">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-2 text-sm">
+                Pipeline Stats
+              </h3>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Headcount Auth</span>
+                <span className="font-bold text-slate-900 dark:text-white">{requirement.openings} Openings</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Filled Seats</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{requirement.filledPositions} Joined</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Deep Pipeline</span>
+                <span className="font-bold text-violet-600 dark:text-violet-400">{requirement.submissions} Pending</span>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </Drawer>
+    </Modal>
   )
 }
 
@@ -693,7 +706,7 @@ export default function RequirementsPage() {
       status: requirement.status,
       priority: requirement.priority,
       owner: requirement.owner,
-      budget: requirement.budget,
+      budget: requirement.budget ? requirement.budget.replace(/\$/g, '₹') : '',
       openings: requirement.openings,
       filledPositions: requirement.filledPositions,
       submissions: requirement.submissions,
@@ -1098,7 +1111,7 @@ export default function RequirementsPage() {
               <input
                 id="req-budget"
                 className="input-modern w-full"
-                placeholder="e.g., $120K - $150K"
+                placeholder="e.g., ₹12L - ₹15L"
                 value={formState.budget}
                 onChange={(e) => setFormState((s) => ({ ...s, budget: e.target.value }))}
               />

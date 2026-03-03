@@ -903,6 +903,88 @@ export default function CandidatesPage() {
         variant="danger"
       />
 
+      {/* View Details Modal */}
+      <Modal
+        isOpen={isViewDrawerOpen}
+        onClose={() => setIsViewDrawerOpen(false)}
+        title="Candidate Profile Details"
+        size="lg"
+      >
+        {selectedCandidate && (
+          <div className="space-y-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-violet-500/30">
+                  {selectedCandidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{selectedCandidate.name}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <StatusBadge status={selectedCandidate.status} />
+                    {selectedCandidate.isStarred && <Star className="w-4 h-4 text-amber-500 fill-current" />}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{selectedCandidate.role}</p>
+                <p className="text-xs text-slate-400 mt-1">Applied: {new Date(selectedCandidate.appliedDate).toLocaleDateString('en-US')}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-3 border border-slate-100 dark:border-slate-700/50">
+                <h4 className="font-semibold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-200 dark:border-slate-700/50">Contact Info</h4>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <Mail className="w-4 h-4 text-slate-400" />
+                  <a href={`mailto:${selectedCandidate.email}`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">{selectedCandidate.email}</a>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <Phone className="w-4 h-4 text-slate-400" />
+                  <a href={`tel:${selectedCandidate.phone}`} className="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">{selectedCandidate.phone}</a>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <MapPin className="w-4 h-4 text-slate-400" />
+                  <span>{selectedCandidate.location}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-3 border border-slate-100 dark:border-slate-700/50">
+                <h4 className="font-semibold text-sm text-slate-900 dark:text-white pb-2 border-b border-slate-200 dark:border-slate-700/50">Professional Details</h4>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <Briefcase className="w-4 h-4 text-slate-400" />
+                  <span>{selectedCandidate.experience} Years Experience</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <span className="w-4 h-4 flex items-center justify-center text-slate-400 tracking-tighter text-[10px] font-bold border border-slate-300 dark:border-slate-600 rounded">SRC</span>
+                  <span>Source: {selectedCandidate.source}</span>
+                </div>
+                {selectedCandidate.resumeUrl && (
+                  <div className="flex items-center gap-2 text-sm pt-1">
+                    <FileText className="w-4 h-4 text-violet-500" />
+                    <a href={selectedCandidate.resumeUrl} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline font-medium">View Resume Document</a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-sm text-slate-900 dark:text-white mb-3">Skills & Attributes</h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedCandidate.skills.map(skill => (
+                  <span key={skill.name} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    {skill.name}
+                  </span>
+                ))}
+                {selectedCandidate.skills.length === 0 && (
+                  <span className="text-sm text-slate-400 italic">No specific skills listed.</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+      </Modal>
+
       {/* Add/Edit Modal */}
       <Modal
         isOpen={isAddModalOpen}

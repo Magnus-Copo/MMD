@@ -10,7 +10,7 @@ import { applyRequirementRBAC } from '@/lib/auth/rbac'
 import { getCurrentUser } from '@/lib/auth'
 
 // Ensure Company schema is registered (used by populate)
- 
+
 const _Company = Company
 
 const STALLED_DAYS = Number(process.env.DASHBOARD_STALLED_DAYS ?? 15)
@@ -50,11 +50,12 @@ function formatWorkMode(workMode: string | undefined): string {
  */
 function formatBudget(salaryMin?: number, salaryMax?: number): string {
     if (!salaryMin && !salaryMax) return 'Not specified'
+    // Convert to Lakhs (100,000) instead of Thousands (1,000)
     if (salaryMin && salaryMax) {
-        return `$${(salaryMin / 1000).toFixed(0)}K - $${(salaryMax / 1000).toFixed(0)}K`
+        return `₹${(salaryMin / 100000).toFixed(1)}L - ₹${(salaryMax / 100000).toFixed(1)}L`
     }
-    if (salaryMin) return `$${(salaryMin / 1000).toFixed(0)}K+`
-    return `Up to $${(salaryMax! / 1000).toFixed(0)}K`
+    if (salaryMin) return `₹${(salaryMin / 100000).toFixed(1)}L+`
+    return `Up to ₹${(salaryMax! / 100000).toFixed(1)}L`
 }
 
 export async function getRequirements(filters: any = {}) {
