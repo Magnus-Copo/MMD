@@ -1,7 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Search, Plus, Database, Zap, Target } from 'lucide-react'
+import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 
 interface ScraperDashboardProps {
   userName: string
@@ -15,6 +18,9 @@ interface ScraperDashboardProps {
 }
 
 export function ScraperDashboard({ userName, metrics }: Readonly<ScraperDashboardProps>) {
+  const router = useRouter()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
   return (
     <div className="space-y-8 text-[var(--foreground)] relative">
       {/* Background Decor */}
@@ -35,14 +41,14 @@ export function ScraperDashboard({ userName, metrics }: Readonly<ScraperDashboar
             Your command center for lead generation and data intelligence.
           </p>
         </div>
-        <Link
-          href="/dashboard/leads/new"
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
           className="group relative inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/30 overflow-hidden hover:scale-105 transition-all duration-300"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
           <Plus className="relative h-5 w-5" />
           <span className="relative">Add New Lead</span>
-        </Link>
+        </button>
       </div>
 
       {/* Metrics Row */}
@@ -103,9 +109,9 @@ export function ScraperDashboard({ userName, metrics }: Readonly<ScraperDashboar
               <p className="text-slate-500 text-sm">Access full database</p>
             </Link>
 
-            <Link
-              href="/dashboard/leads/new"
-              className="p-5 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:ring-4 hover:ring-emerald-50 transition-all duration-300 group"
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="p-5 w-full text-left rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:ring-4 hover:ring-emerald-50 transition-all duration-300 group"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
@@ -115,7 +121,7 @@ export function ScraperDashboard({ userName, metrics }: Readonly<ScraperDashboar
               </div>
               <p className="font-bold text-slate-800 text-lg">Add Lead</p>
               <p className="text-slate-500 text-sm">Manual entry form</p>
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -142,6 +148,14 @@ export function ScraperDashboard({ userName, metrics }: Readonly<ScraperDashboar
           </ul>
         </div>
       </div>
+
+      <CreateLeadModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

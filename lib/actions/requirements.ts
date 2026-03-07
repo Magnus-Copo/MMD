@@ -169,6 +169,7 @@ export async function createRequirement(data: RequirementData) {
         })
 
         revalidatePath('/dashboard/requirements')
+        revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(newRequirement)) }
     } catch (error) {
         console.error('Error creating requirement:', error)
@@ -189,6 +190,7 @@ export async function updateRequirement(id: string, data: Partial<RequirementDat
         if (!updated) throw new Error('Requirement not found or permission denied')
 
         revalidatePath('/dashboard/requirements')
+        revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(updated)) }
     } catch (error) {
         console.error('Error updating requirement:', error)
@@ -210,6 +212,7 @@ export async function deleteRequirement(id: string) {
         if (!deleted) throw new Error('Requirement not found or permission denied')
 
         revalidatePath('/dashboard/requirements')
+        revalidatePath('/dashboard')
         return { success: true, message: 'Requirement deleted' }
     } catch (error) {
         console.error('Error deleting requirement:', error)
@@ -245,6 +248,7 @@ export async function freezeRequirement(id: string, comment?: string) {
         })
 
         revalidatePath('/dashboard/requirements')
+        revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(requirement)) }
     } catch (error) {
         console.error('Error freezing requirement:', error)
@@ -278,6 +282,7 @@ export async function reassignRequirement(id: string, newOwnerId: string, commen
         })
 
         revalidatePath('/dashboard/requirements')
+        revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(requirement)) }
     } catch (error) {
         console.error('Error reassigning requirement:', error)

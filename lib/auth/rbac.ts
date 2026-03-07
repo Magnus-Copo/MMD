@@ -12,8 +12,8 @@ type UserIdType = string | { toString(): string }
  * Apply RBAC filter for Leads queries.
  * 
  * Rules:
- * - ADMIN: sees all non-deleted leads
- * - COORDINATOR: sees only leads assigned to them (least privilege)
+ * - SUPER_ADMIN / ADMIN: sees all non-deleted leads
+ * - COORDINATOR: sees all non-deleted leads (needs full pipeline visibility to manage scrapers)
  * - RECRUITER: Forbidden (no lead access)
  * - SCRAPER: sees only leads assigned to them
  * 
@@ -30,12 +30,12 @@ export function applyLeadRBAC(
     return { allowed: false, filter: {} }
   }
 
-  // COORDINATOR and SCRAPER can only see their own assigned leads
-  if (user.role === 'COORDINATOR' || user.role === 'SCRAPER') {
+  // SCRAPER can only see their own assigned leads
+  if (user.role === 'SCRAPER') {
     where.assignedTo = user._id?.toString()
   }
 
-  // ADMIN and SUPER_ADMIN can see all leads (no additional filters)
+  // ADMIN, SUPER_ADMIN, and COORDINATOR can see all leads (no additional filters)
 
   // Always exclude soft-deleted leads
   if (where.deletedAt === undefined) {

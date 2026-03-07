@@ -33,7 +33,9 @@ import Button, { IconButton } from '@/components/ui/Button'
 import { SearchInput, Select } from '@/components/ui/Input'
 import { Modal, ConfirmDialog, Drawer } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { Combobox } from '@/components/ui/Combobox'
 import { getRequirements, createRequirement, updateRequirement, deleteRequirement, freezeRequirement, reassignRequirement } from '@/lib/actions/requirements'
+import { getCompanies } from '@/lib/actions/module3-company'
 import { AutomationPanel } from '@/components/automation/AutomationPanel'
 import { createExportJobAction } from '@/lib/actions/module15-export'
 
@@ -557,6 +559,8 @@ export default function RequirementsPage() {
 
   const [requirements, setRequirements] = useState<Requirement[]>([]) // Start empty, fetch real data
   const [isLoading, setIsLoading] = useState(true)
+  const [companies, setCompanies] = useState<Array<{ _id: string; name: string; location?: string }>>([])
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false)
 
   // Fetch Data
   const fetchData = async () => {
@@ -580,6 +584,39 @@ export default function RequirementsPage() {
       fetchData()
     }
   }, [filterStatus, sessionStatus])
+
+  // Fetch companies for the dropdown
+  const fetchCompanies = async () => {
+    if (sessionStatus !== 'authenticated') return
+
+    setIsLoadingCompanies(true)
+    const res = await getCompanies({})
+    if (res.success) {
+      setCompanies((res.data || []) as any)
+    } else {
+      toast.error('Error', res.error || 'Failed to fetch companies')
+    }
+    setIsLoadingCompanies(false)
+  }
+
+  useEffect(() => {
+    if (sessionStatus === 'authenticated') {
+      fetchCompanies()
+    }
+  }, [sessionStatus])
+
+  // Handle action parameter for creating new requirements
+  useEffect(() => {
+    if (typeof window !== 'undefined' && canCreate) {
+      const sp = new URLSearchParams(window.location.search)
+      if (sp.get('action') === 'new') {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('action')
+        window.history.replaceState({}, '', url.toString())
+        setIsAddModalOpen(true)
+      }
+    }
+  }, [canCreate])
 
   const [formState, setFormState] = useState({
     title: '',
@@ -1074,13 +1111,27 @@ export default function RequirementsPage() {
               />
             </div>
             <div>
-              <label htmlFor="req-company" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Company</label>
-              <input
-                id="req-company"
-                className="input-modern w-full"
-                placeholder="e.g., ArcLight Systems"
-                value={formState.company}
-                onChange={(e) => setFormState((s) => ({ ...s, company: e.target.value }))}
+              <Combobox
+                label="Company"
+                placeholder="Select a company"
+                searchPlaceholder="Search companies..."
+                emptyMessage="No companies found"
+                value={formState.companyId}
+                onChange={(companyId) => {
+                  const selectedCompany = companies.find((c) => c._id === companyId)
+                  setFormState((s) => ({
+                    ...s,
+                    companyId,
+                    company: selectedCompany?.name || '',
+                    location: selectedCompany?.location || s.location,
+                  }))
+                }}
+                options={companies.map((company) => ({
+                  value: company._id,
+                  label: company.name,
+                  subtitle: company.location || 'No location specified',
+                }))}
+                className="w-full"
               />
             </div>
             <div>

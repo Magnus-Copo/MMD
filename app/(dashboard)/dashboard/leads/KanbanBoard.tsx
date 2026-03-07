@@ -8,8 +8,8 @@ import {
     DragStartEvent,
     DragEndEvent,
     closestCorners,
+    useDroppable,
 } from '@dnd-kit/core'
-import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -36,10 +36,10 @@ export interface Lead {
 }
 
 interface KanbanBoardProps {
-    leads: Lead[]
-    onStatusChange: (leadId: string, newStatus: LeadStatus) => void
-    onEdit: (lead: Lead) => void
-    onConvert: (leadId: string) => void
+    readonly leads: Lead[]
+    readonly onStatusChange: (leadId: string, newStatus: LeadStatus) => void
+    readonly onEdit: (lead: Lead) => void
+    readonly onConvert: (leadId: string) => void
 }
 
 const statusColumns: LeadStatus[] = ['NEW', 'CONTACTED', 'QUALIFIED', 'CONVERTED', 'REJECTED', 'STALLED']
@@ -146,10 +146,10 @@ export function KanbanBoard({ leads, onStatusChange, onEdit, onConvert }: Kanban
 }
 
 function DroppableColumn({ status, leads, onEdit, onConvert }: {
-    status: LeadStatus,
-    leads: Lead[],
-    onEdit: (lead: Lead) => void,
-    onConvert: (leadId: string) => void
+    readonly status: LeadStatus,
+    readonly leads: Lead[],
+    readonly onEdit: (lead: Lead) => void,
+    readonly onConvert: (leadId: string) => void
 }) {
     const { setNodeRef, isOver } = useDroppable({
         id: status,

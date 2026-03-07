@@ -9,14 +9,14 @@
   ┬╖ serverActions
 
   Creating an optimized production build ...
-Γ£ô Compiled successfully in 10.1s
+Γ£ô Compiled successfully in 17.1s
   Running TypeScript ...
   Collecting page data using 11 workers ...
   Generating static pages using 11 workers (0/26) ...
   Generating static pages using 11 workers (6/26) 
   Generating static pages using 11 workers (12/26) 
   Generating static pages using 11 workers (19/26) 
-Γ£ô Generating static pages using 11 workers (26/26) in 607.2ms
+Γ£ô Generating static pages using 11 workers (26/26) in 1279.3ms
   Finalizing page optimization ...
 
 Route (app)

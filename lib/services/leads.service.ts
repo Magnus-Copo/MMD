@@ -41,9 +41,6 @@ export class LeadsService {
         return leads
     }
 
-    /**
-     * Create a new lead
-     */
     static async create(user: UserContext, data: LeadInput) {
         // Permission check (Admin, Coordinator, Scraper)
         const allowedCreators = ["SUPER_ADMIN", "ADMIN", "COORDINATOR", "SCRAPER"]
@@ -68,6 +65,49 @@ export class LeadsService {
         })
 
         return lead.toObject()
+    }
+
+    /**
+     * Bulk create leads
+     */
+    static async bulkCreate(user: UserContext, dataArray: LeadInput[]) {
+        const allowedCreators = ["SUPER_ADMIN", "ADMIN", "COORDINATOR", "SCRAPER"]
+        if (!allowedCreators.includes(user.role)) {
+            throw new ForbiddenError("You do not have permission to create leads")
+        }
+
+        await connectDB()
+
+        const docsToInsert = dataArray.map(data => ({
+            ...data,
+            status: data.status ?? "NEW",
+            assignedTo: data.assignedTo ?? user.id,
+        }))
+
+        // ordered: false ensures that if some records fail (like duplicates), others will succeed
+        const result = await Lead.insertMany(docsToInsert, { ordered: false }).catch(err => {
+            if (err.writeErrors) {
+                // Return what did succeed and the errors
+                return err.insertedDocs
+            }
+            throw err
+        })
+
+        // Optional: bulk audit logging
+        if (result && Array.isArray(result) && result.length > 0) {
+            await AuditLog.insertMany(result.map((doc: any) => ({
+                userId: user.id,
+                action: "LEAD_CREATED",
+                entity: "Lead",
+                entityId: doc._id.toString(),
+                newValue: { bulkImport: true, companyName: doc.companyName },
+            })))
+        }
+
+        return {
+            insertedCount: result ? result.length : 0,
+            attemptedCount: dataArray.length
+        }
     }
 
     /**
@@ -96,9 +136,11 @@ export class LeadsService {
         if (data.contactName !== undefined) lead.contactName = data.contactName
         if (data.contactPhone !== undefined) lead.contactPhone = data.contactPhone
         if (data.contactEmail !== undefined) lead.contactEmail = data.contactEmail
+        if (data.contactLinkedIn !== undefined) lead.contactLinkedIn = data.contactLinkedIn
         if (data.confidenceScore !== undefined) lead.confidenceScore = data.confidenceScore
         if (data.notes !== undefined) lead.notes = data.notes
         if (data.status !== undefined) lead.status = data.status
+        if ((data as any).followUpDate !== undefined) lead.followUpDate = (data as any).followUpDate
         if (data.assignedTo !== undefined) lead.assignedTo = data.assignedTo
 
         await lead.save()

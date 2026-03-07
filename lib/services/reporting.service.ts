@@ -123,13 +123,12 @@ export class ReportingService {
             assignedGroup: user.assignedGroup ?? null,
         }
 
-        let reportData: unknown
         // @ts-ignore
         if (!reportGenerators[data.type]) {
             throw new AppError("Unsupported report type")
         }
         // @ts-ignore
-        reportData = await reportGenerators[data.type](filters, userContextForGenerator)
+        const reportData: unknown = await reportGenerators[data.type](filters, userContextForGenerator)
 
         if (data.format === 'csv') {
             let rows: Record<string, unknown>[] = []

@@ -43,7 +43,24 @@ export const createLead = createProtectedAction(
       payload as z.infer<typeof LeadSchema> // Explicit cast to ensure TS sees the default
     )
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
     return serializeDoc(lead)
+  }
+)
+
+/**
+ * Bulk Create Leads Action
+ */
+export const bulkCreateLeads = createProtectedAction(
+  z.array(LeadSchema),
+  async (payload, session) => {
+    const result = await LeadsService.bulkCreate(
+      { ...session.user },
+      payload as z.infer<typeof LeadSchema>[]
+    )
+    revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
+    return result
   }
 )
 
@@ -60,6 +77,7 @@ export const updateLead = createProtectedAction(
       data
     )
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
     return serializeDoc(lead)
   }
 )
@@ -76,6 +94,8 @@ export const convertLeadToCompany = createProtectedAction(
     )
 
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/companies')
     return {
       lead: serializeDoc(result.lead),
       company: serializeDoc(result.company as any),
@@ -101,6 +121,7 @@ export const updateLeadStatus = createProtectedAction(
       { status: payload.status }
     )
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
     return serializeDoc(lead)
   }
 )
@@ -116,6 +137,7 @@ export const addLeadActivity = createProtectedAction(
       payload
     )
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
     return serializeDoc(lead)
   }
 )
@@ -131,6 +153,7 @@ export const deleteLead = createProtectedAction(
       payload.leadId
     )
     revalidatePath('/dashboard/leads')
+    revalidatePath('/dashboard')
     return { success: true }
   }
 )

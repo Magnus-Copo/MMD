@@ -344,7 +344,7 @@ export function AdminDashboard({ metrics, userName }: Readonly<AdminDashboardPro
 
             <div className="space-y-3">
               <Link
-                href="/dashboard/requirements/new"
+                href="/dashboard/requirements?action=new"
                 className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-brand-50 to-white border border-brand-200/60 hover:border-brand-400 hover:shadow-lg hover:shadow-brand-100 hover:-translate-y-0.5 transition-all duration-200 group"
               >
                 <div className="flex items-center gap-3">

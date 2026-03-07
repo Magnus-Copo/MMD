@@ -1,0 +1,106 @@
+﻿
+> mmdss@0.1.0 lint
+> eslint .
+
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(auth)\login\page.tsx
+  9:9  warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\_components\RecruiterDashboard.tsx
+   7:3  warning  'Plus' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  10:3  warning  'Sparkles' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\candidates\page.tsx
+    3:10  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   20:3   warning  'Download' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+   26:3   warning  'Loader2' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+   27:3   warning  'Filter' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   33:32  warning  'Drawer' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+  215:10  warning  'SkillBadge' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  251:3   warning  'onToggleStar' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  467:14  warning  'err' is defined but never used                                                 @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\companies\page.tsx
+  262:28  warning  'setShowExpiringOnly' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\integrations\page.tsx
+  12:3  warning  'Trash2' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\invoices\new\page.tsx
+    5:56  warning  'Calendar' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  124:18  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\invoices\page.tsx
+  114:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\leads\page.tsx
+  33:3  warning  'createLead' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\mail\page.tsx
+   8:5   warning  'Search' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+  12:5   warning  'AlertCircle' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  38:11  warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\placements\[id]\page.tsx
+  11:5   warning  'User' is defined but never used. Allowed unused vars must match /^_/u             @typescript-eslint/no-unused-vars
+  12:5   warning  'Building2' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+  22:10  warning  'startTransition' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  30:10  warning  'Modal' is defined but never used. Allowed unused vars must match /^_/u            @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\placements\new\page.tsx
+  40:19  warning  'session' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\placements\page.tsx
+   7:5   warning  'Search' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  86:18  warning  'error' is defined but never used                                         @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\app\(dashboard)\dashboard\requirements\page.tsx
+  24:3   warning  'Calendar' is defined but never used. Allowed unused vars must match /^_/u               @typescript-eslint/no-unused-vars
+  29:3   warning  'BarChart3' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+  34:32  warning  'Drawer' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  37:10  warning  'AutomationPanel' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+  41:7   warning  'SKELETON_IDS' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\components\layout\AmbientBackground.tsx
+  3:10  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  3:18  warning  'useMemo' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  3:27  warning  'useCallback' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  3:40  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  3:51  warning  'useState' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\components\layout\NeuroBackground.tsx
+  3:10  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  3:18  warning  'useMemo' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  3:27  warning  'useCallback' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  3:40  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  3:51  warning  'useState' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\components\leads\CreateLeadModal.tsx
+   81:18  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+  103:22  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+  146:18  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\lib\actions\dashboard.ts
+  25:9  warning  'monthStart' is assigned a value but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  27:9  warning  'fiveDaysAgo' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\lib\actions\module13-notification.ts
+  19:7  warning  'NotificationIdSchema' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\lib\actions\module15-mail.ts
+    5:19  warning  'IMessage' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   36:14  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+   51:14  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+   77:14  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+   92:14  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+  107:14  warning  'error' is defined but never used                                           @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\lib\services\activity.service.ts
+  3:20  warning  'ActivityType' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  3:34  warning  'OutcomeType' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+
+C:\Users\LOHITH MS\Downloads\Magnus_copo_staffing_operations_system\Magnus_copo_staffing_operations_system\lib\services\reporting.service.ts
+  132:9  error  'reportData' is never reassigned. Use 'const' instead  prefer-const
+
+Γ£û 57 problems (1 error, 56 warnings)
+

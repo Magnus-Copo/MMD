@@ -66,19 +66,19 @@ export interface LeadFilters {
 }
 
 export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string }> = {
-  NEW: { label: 'New', color: 'text-blue-700', bgColor: 'bg-blue-500' },
-  CONTACTED: { label: 'Contacted', color: 'text-purple-700', bgColor: 'bg-purple-500' },
-  QUALIFIED: { label: 'Qualified', color: 'text-indigo-700', bgColor: 'bg-indigo-500' },
-  FOLLOW_UP: { label: 'Follow-up', color: 'text-orange-700', bgColor: 'bg-orange-500' },
-  CONVERTED: { label: 'Converted', color: 'text-green-700', bgColor: 'bg-green-500' },
-  REJECTED: { label: 'Rejected', color: 'text-red-700', bgColor: 'bg-red-500' },
-  STALLED: { label: 'Stalled', color: 'text-amber-700', bgColor: 'bg-amber-500' },
+  NEW: { label: 'New', color: 'text-blue-800', bgColor: 'bg-blue-600' },
+  CONTACTED: { label: 'Contacted', color: 'text-purple-800', bgColor: 'bg-purple-600' },
+  QUALIFIED: { label: 'Qualified', color: 'text-indigo-800', bgColor: 'bg-indigo-600' },
+  FOLLOW_UP: { label: 'Follow-up', color: 'text-orange-900', bgColor: 'bg-orange-600' },
+  CONVERTED: { label: 'Converted', color: 'text-green-800', bgColor: 'bg-green-600' },
+  REJECTED: { label: 'Rejected', color: 'text-red-800', bgColor: 'bg-red-600' },
+  STALLED: { label: 'Stalled', color: 'text-amber-900', bgColor: 'bg-amber-600' },
 }
 
 export const CONFIDENCE_CONFIG = {
-  high: { min: 80, label: 'High', color: 'text-green-700', bgColor: 'bg-green-600' },
-  medium: { min: 60, label: 'Medium', color: 'text-amber-700', bgColor: 'bg-amber-600' },
-  low: { min: 0, label: 'Low', color: 'text-red-700', bgColor: 'bg-red-600' },
+  high: { min: 80, label: 'High', color: 'text-green-800', bgColor: 'bg-green-600' },
+  medium: { min: 60, label: 'Medium', color: 'text-amber-900', bgColor: 'bg-amber-600' },
+  low: { min: 0, label: 'Low', color: 'text-red-800', bgColor: 'bg-red-600' },
 }
 
 export const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
@@ -98,6 +98,7 @@ export const SOURCE_PLATFORMS = [
   'Cold Outreach',
   'Naukri',
   'Indeed',
+  'Instagram',
 ]
 
 export const SECTORS: { value: LeadSector; label: string }[] = [

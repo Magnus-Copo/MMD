@@ -159,7 +159,7 @@ export function LeadDetailsDialog({
                   className="flex items-center gap-2 text-sm text-indigo-600 hover:underline"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  LinkedIn Profile
+                  {lead.sourcePlatform ? `${lead.sourcePlatform} Profile` : 'Profile Link'}
                 </a>
               )}
             </div>

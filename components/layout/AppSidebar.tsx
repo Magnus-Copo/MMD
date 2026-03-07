@@ -10,7 +10,6 @@ import {
   Users,
   Search,
   Clock,
-  Mail,
   BarChart3,
 
   ChevronRight,
@@ -104,12 +103,6 @@ const navItems: NavItem[] = [
     href: '/dashboard/invoices',
     icon: <FileText className="h-5 w-5" />,
     roles: ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR'],
-  },
-  {
-    label: 'Mail / Requests',
-    href: '/dashboard/mail',
-    icon: <Mail className="h-5 w-5" />,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR', 'RECRUITER', 'SCRAPER'],
   },
 ]
 

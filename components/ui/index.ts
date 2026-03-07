@@ -15,6 +15,8 @@
 export { default as Button } from './Button'
 export { Input } from './Input'
 export { Modal } from './Modal'
+export { Combobox } from './Combobox'
+export type { ComboboxOption } from './Combobox'
 export { SkeletonCard, SkeletonTable, SkeletonChart, SkeletonKPIGrid } from './Skeleton'
 export { EmptyState } from './EmptyState'
 

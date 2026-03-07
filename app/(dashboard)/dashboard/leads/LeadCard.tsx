@@ -1,14 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { MoreHorizontal, Phone, Mail, Linkedin, Building2, GripVertical, ArrowRight } from 'lucide-react'
+import { MoreHorizontal, Phone, Mail, Building2, GripVertical, ArrowRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Lead } from './KanbanBoard'
 
 interface LeadCardProps {
-    lead: Lead
-    onEdit: (lead: Lead) => void
-    onConvert: (leadId: string) => void
+    readonly lead: Lead
+    readonly onEdit: (lead: Lead) => void
+    readonly onConvert: (leadId: string) => void
 }
 
 export function LeadCard({ lead, onEdit, onConvert }: LeadCardProps) {
@@ -84,11 +84,7 @@ export function LeadCard({ lead, onEdit, onConvert }: LeadCardProps) {
             {/* Header */}
             <div className="pr-6 mb-2">
                 <div className="flex items-center gap-1.5 mb-1">
-                    {lead.sourcePlatform.toLowerCase().includes('linkedin') ? (
-                        <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
-                    ) : (
-                        <Building2 className="h-3.5 w-3.5 text-[var(--foreground-subtle)]" />
-                    )}
+                    <Building2 className="h-3.5 w-3.5 text-[var(--foreground-subtle)]" />
                     <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-muted)]">
                         {lead.sourcePlatform}
                     </span>

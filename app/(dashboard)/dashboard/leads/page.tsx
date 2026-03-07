@@ -25,11 +25,11 @@ import { LeadDetailsDialog } from '@/components/leads/LeadDetailsDialog'
 import { LeadActivityDialog } from '@/components/leads/LeadActivityDialog'
 import { LeadConvertDialog } from '@/components/leads/LeadConvertDialog'
 import { LeadsAnalytics } from '@/components/leads/LeadsAnalytics'
+import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 
 import { canConvertLead, canDeleteLead, canModifyLead } from '@/lib/auth/rbac'
 import {
   convertLeadToCompany,
-  createLead,
   getLeads,
   updateLead,
   deleteLead,
@@ -235,39 +235,23 @@ export default function LeadsPage() {
     fetchData()
   }, [fetchData, hasLeadAccess, role])
 
-  // Handlers
-  const handleCreateLead = async () => {
-    if (!canCreateLead) {
-      toast.error('Forbidden', 'You do not have permission to create leads')
-      return
+  // Handle action parameter to open specific modals (e.g. Add Lead)
+  useEffect(() => {
+    if (globalThis.window && canCreateLead) {
+      const searchParams = new URLSearchParams(globalThis.window.location.search)
+      if (searchParams.get('action') === 'new') {
+        setIsCreateModalOpen(true)
+        // Clean up the URL to prevent reopening on refresh
+        const url = new URL(globalThis.window.location.href)
+        url.searchParams.delete('action')
+        globalThis.window.history.replaceState({}, '', url.toString())
+      }
     }
+  }, [canCreateLead])
 
-    if (!formState.companyName.trim() || !formState.sourcePlatform.trim()) {
-      toast.error('Missing fields', 'Company name and source platform are required')
-      return
-    }
-
-    // Duplicate check
-    const existing = leads.find(l => l.companyName.toLowerCase() === formState.companyName.toLowerCase())
-    if (existing) {
-      toast.error('Duplicate', `Lead for "${formState.companyName}" already exists!`)
-      return
-    }
-
-    const result = await createLead({
-      ...formState,
-      confidenceScore: formState.confidenceScore,
-    })
-
-    if (!result.success) {
-      toast.error('Create failed', result.error)
-      return
-    }
-
+  const handleCreateSuccess = async () => {
     await fetchData()
     setIsCreateModalOpen(false)
-    setFormState(emptyForm)
-    toast.success('Lead Created', formState.companyName)
   }
 
   const handleEditLead = async () => {
@@ -697,6 +681,7 @@ export default function LeadsPage() {
                       canConvert={canConvert}
                       canDelete={canDelete}
                       loading={loading}
+                      onFiltersChange={setFilters}
                     />
                   </div>
                 ) : (
@@ -709,169 +694,11 @@ export default function LeadsPage() {
       </div>
 
       {/* Create Lead Modal */}
-      <Modal
+      <CreateLeadModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Add New Lead"
-        description="Enter lead details to track potential hiring opportunities. All fields marked with * are mandatory."
-        size="lg"
-      >
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="create-source" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Source Platform *</label>
-              <select
-                id="create-source"
-                title="Source Platform"
-                className="select-modern w-full"
-                value={formState.sourcePlatform}
-                onChange={(e) => setFormState(prev => ({ ...prev, sourcePlatform: e.target.value }))}
-              >
-                <option value="">Select source</option>
-                {SOURCE_PLATFORMS.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="create-company" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Company Name *</label>
-              <input
-                id="create-company"
-                className="input-modern"
-                placeholder="Enter company name"
-                value={formState.companyName}
-                onChange={(e) => setFormState(prev => ({ ...prev, companyName: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label htmlFor="create-sector" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Sector *</label>
-              <select
-                id="create-sector"
-                title="Sector"
-                className="select-modern w-full"
-                value={formState.sector}
-                onChange={(e) => setFormState(prev => ({ ...prev, sector: e.target.value as LeadSector }))}
-              >
-                {SECTORS.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="create-confidence" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Confidence % *</label>
-              <input
-                id="create-confidence"
-                className="input-modern"
-                type="number"
-                min="1"
-                max="100"
-                placeholder="1-100"
-                value={formState.confidenceScore}
-                onChange={(e) => setFormState(prev => ({ ...prev, confidenceScore: Number(e.target.value) }))}
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 pt-4">
-            <h4 className="font-semibold text-slate-900 mb-4">Contact Information</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="create-contact-name" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Contact Name *</label>
-                <input
-                  id="create-contact-name"
-                  className="input-modern"
-                  placeholder="Full name"
-                  value={formState.contactName}
-                  onChange={(e) => setFormState(prev => ({ ...prev, contactName: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="create-phone" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Phone *</label>
-                <input
-                  id="create-phone"
-                  className="input-modern"
-                  placeholder="+91 XXXXX XXXXX"
-                  value={formState.contactPhone}
-                  onChange={(e) => setFormState(prev => ({ ...prev, contactPhone: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="create-email" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Email *</label>
-                <input
-                  id="create-email"
-                  className="input-modern"
-                  type="email"
-                  placeholder="email@company.com"
-                  value={formState.contactEmail}
-                  onChange={(e) => setFormState(prev => ({ ...prev, contactEmail: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="create-linkedin" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">LinkedIn Profile</label>
-                <input
-                  id="create-linkedin"
-                  className="input-modern"
-                  placeholder="linkedin.com/in/..."
-                  value={formState.contactLinkedIn}
-                  onChange={(e) => setFormState(prev => ({ ...prev, contactLinkedIn: e.target.value }))}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 pt-4">
-            <h4 className="font-semibold text-slate-900 mb-4">Tracking Details</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="create-followup" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Follow-up Date</label>
-                <input
-                  id="create-followup"
-                  className="input-modern"
-                  type="date"
-                  title="Follow-up Date"
-                  placeholder="Select follow-up date"
-                  value={formState.followUpDate}
-                  onChange={(e) => setFormState(prev => ({ ...prev, followUpDate: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="create-status" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Status</label>
-                <select
-                  id="create-status"
-                  title="Status"
-                  className="select-modern w-full"
-                  value={formState.status}
-                  onChange={(e) => setFormState(prev => ({ ...prev, status: e.target.value as LeadStatus }))}
-                >
-                  {statusOptions.filter(s => s.value !== 'all').map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="mt-4">
-              <label htmlFor="create-notes" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Notes</label>
-              <textarea
-                id="create-notes"
-                className="input-modern min-h-[80px]"
-                placeholder="Add any relevant notes about this lead..."
-                value={formState.notes}
-                onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <AnimatedButton variant="secondary" onClick={() => setIsCreateModalOpen(false)}>
-              Cancel
-            </AnimatedButton>
-            <AnimatedButton variant="primary" onClick={handleCreateLead}>
-              Add Lead
-            </AnimatedButton>
-          </div>
-        </div>
-      </Modal>
+        onSuccess={handleCreateSuccess}
+      />
 
       {/* Edit Lead Modal */}
       <Modal
@@ -998,11 +825,13 @@ export default function LeadsPage() {
                 />
               </div>
               <div>
-                <label htmlFor="edit-linkedin" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">LinkedIn Profile</label>
+                <label htmlFor="edit-linkedin" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {formState.sourcePlatform ? `${formState.sourcePlatform} Profile` : 'Profile Link'}
+                </label>
                 <input
                   id="edit-linkedin"
                   className="input-modern"
-                  placeholder="linkedin.com/in/..."
+                  placeholder={formState.sourcePlatform ? `Enter ${formState.sourcePlatform} profile URL...` : "https://..."}
                   value={formState.contactLinkedIn}
                   onChange={(e) => setFormState(prev => ({ ...prev, contactLinkedIn: e.target.value }))}
                 />

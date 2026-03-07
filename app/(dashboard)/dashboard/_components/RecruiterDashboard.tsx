@@ -4,10 +4,8 @@ import Link from 'next/link'
 import {
   Briefcase,
   Clock,
-  Plus,
   ExternalLink,
   CheckCircle2,
-  Sparkles,
   ArrowRight
 } from 'lucide-react'
 import { KPICard, KPIGrid, FollowUpList } from '@/components/dashboard'
@@ -86,11 +84,11 @@ export function RecruiterDashboard({ metrics, recruiterData, userName }: Readonl
 
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex gap-4">
           <Link
-            href="/dashboard/activities/new"
+            href="/dashboard/requirements"
             className="group relative inline-flex items-center gap-2 px-6 py-3 bg-slate-900 text-white font-bold rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-xl shadow-emerald-900/10"
           >
-            <Plus className="h-5 w-5" />
-            Activity
+            <Briefcase className="h-5 w-5" />
+            My Jobs
             <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
         </motion.div>
@@ -203,10 +201,10 @@ export function RecruiterDashboard({ metrics, recruiterData, userName }: Readonl
         {/* Follow-ups Component */}
         <motion.div variants={slideUp} className="space-y-4">
           <div className="flex items-center justify-between">
-             <h3 className="text-xl font-bold font-display text-slate-900">Focus Mode</h3>
-             <span className="text-xs text-slate-500 uppercase tracking-wide bg-slate-100 px-2 py-1 rounded-md font-bold">
-               {myFollowUps.length} Candidates Pending
-             </span>
+            <h3 className="text-xl font-bold font-display text-slate-900">Focus Mode</h3>
+            <span className="text-xs text-slate-500 uppercase tracking-wide bg-slate-100 px-2 py-1 rounded-md font-bold">
+              {myFollowUps.length} Candidates Pending
+            </span>
           </div>
           <FollowUpList
             followUps={myFollowUps}

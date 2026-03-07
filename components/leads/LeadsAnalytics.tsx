@@ -57,11 +57,11 @@ export function LeadsAnalytics({ leads, metrics }: LeadsAnalyticsProps) {
     })
     const sourceData = Array.from(sourceMap.entries()).map(([name, value]) => ({ name, value }))
 
-    const contactedStatuses: Lead['status'][] = ['CONTACTED', 'QUALIFIED', 'FOLLOW_UP', 'CONVERTED']
-    const followUpStatuses: Lead['status'][] = ['QUALIFIED', 'FOLLOW_UP', 'CONVERTED']
+    const contactedStatuses = new Set<Lead['status']>(['CONTACTED', 'QUALIFIED', 'FOLLOW_UP', 'CONVERTED'])
+    const followUpStatuses = new Set<Lead['status']>(['QUALIFIED', 'FOLLOW_UP', 'CONVERTED'])
 
-    const contacted = leads.filter(l => contactedStatuses.includes(l.status)).length
-    const qualified = leads.filter(l => followUpStatuses.includes(l.status)).length
+    const contacted = leads.filter(l => contactedStatuses.has(l.status)).length
+    const qualified = leads.filter(l => followUpStatuses.has(l.status)).length
     const converted = leads.filter(l => l.status === 'CONVERTED').length
     const activeFollowUps = leads.filter(l => l.status === 'FOLLOW_UP').length
     const followUpsDue = leads.filter(l => {
@@ -160,8 +160,8 @@ export function LeadsAnalytics({ leads, metrics }: LeadsAnalyticsProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={analytics.sourceData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4}>
-                    {analytics.sourceData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                    {analytics.sourceData.map((entry) => (
+                      <Cell key={`source-${entry.name}`} fill={SOURCE_COLORS[analytics.sourceData.indexOf(entry) % SOURCE_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
