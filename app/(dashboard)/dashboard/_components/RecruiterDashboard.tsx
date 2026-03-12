@@ -173,7 +173,7 @@ export function RecruiterDashboard({ metrics, recruiterData, userName }: Readonl
                     transition={{ delay: idx * 0.1 }}
                   >
                     <Link
-                      href={`/dashboard/requirements/${req._id}`}
+                      href={`/dashboard/requirements?view=${encodeURIComponent(req._id)}`}
                       className="p-5 flex items-center gap-4 hover:bg-white/60 transition-all group"
                     >
                       <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100 group-hover:scale-110 transition-transform shadow-sm">
@@ -209,6 +209,8 @@ export function RecruiterDashboard({ metrics, recruiterData, userName }: Readonl
           <FollowUpList
             followUps={myFollowUps}
             title="Today's Priority Tasks"
+            maxItems={8}
+            viewAllHref="/dashboard/activities"
           />
         </motion.div>
       </div>

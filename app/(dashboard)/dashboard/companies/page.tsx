@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import {
   Building2,
@@ -37,7 +37,7 @@ import {
   deleteCompany,
 } from '@/lib/actions/module3-company'
 import { DocumentManager } from '@/components/ui/DocumentManager'
-import { createExportJobAction } from '@/lib/actions/module15-export'
+import { createExportJobAction, listExportJobsAction } from '@/lib/actions/module15-export'
 
 // Stable skeleton placeholder IDs
 const SKELETON_IDS = ['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5', 'sk-6'] as const
@@ -73,6 +73,36 @@ interface Company {
   commercialPercent?: number | null
   paymentTerms?: string
   assignedCoordinatorId: string
+}
+
+interface ExportJobItem {
+  _id: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  format: 'CSV' | 'JSON' | 'XLSX'
+  createdAt: string
+  fileUrl?: string
+  errorMessage?: string
+}
+
+function normalizeExportJobs(items: unknown): ExportJobItem[] {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .map((item: any) => {
+      if (!item || typeof item !== 'object') return null
+      const id = typeof item._id === 'string' ? item._id : ''
+      if (!id) return null
+
+      return {
+        _id: id,
+        status: item.status || 'PENDING',
+        format: item.format || 'CSV',
+        createdAt: item.createdAt || '',
+        fileUrl: typeof item.fileUrl === 'string' ? item.fileUrl : undefined,
+        errorMessage: typeof item.errorMessage === 'string' ? item.errorMessage : undefined,
+      } as ExportJobItem
+    })
+    .filter((item): item is ExportJobItem => Boolean(item))
 }
 
 const statusConfig = {
@@ -115,6 +145,40 @@ const sourceOptions = [
 ]
 
 const getInitial = (value?: string) => (value?.trim()?.charAt(0) || '?')
+
+function toDateInputValue(value?: Date | string | null) {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toISOString().slice(0, 10)
+}
+
+function parseDateInput(value: string) {
+  if (!value) return undefined
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return parsed
+}
+
+function hasActiveRequirementMou(company: Pick<Company, 'mouStatus' | 'mouEndDate'>): boolean {
+  if (company.mouStatus !== 'SIGNED') return false
+  if (!company.mouEndDate) return false
+
+  const mouEndDate = new Date(company.mouEndDate)
+  if (Number.isNaN(mouEndDate.getTime())) return false
+
+  const mouEndOfDayUtc = Date.UTC(
+    mouEndDate.getUTCFullYear(),
+    mouEndDate.getUTCMonth(),
+    mouEndDate.getUTCDate(),
+    23,
+    59,
+    59,
+    999
+  )
+
+  return mouEndOfDayUtc >= Date.now()
+}
 
 const mouOptions: { value: MouStatus; label: string }[] = [
   { value: 'NOT_STARTED', label: 'Not Started' },
@@ -259,13 +323,15 @@ export default function CompaniesPage() {
   const [filterStatus, setFilterStatus] = useState<string>(initialStatus)
   const [filterSector, setFilterSector] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('recent')
-  const [showExpiringOnly, setShowExpiringOnly] = useState<boolean>(showExpiringDefault)
+  const [showExpiringOnly, _setShowExpiringOnly] = useState<boolean>(showExpiringDefault)
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [exportJobs, setExportJobs] = useState<ExportJobItem[]>([])
+  const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(false)
 
   const addContactRow = () => {
     setFormState((s) => ({
@@ -315,6 +381,9 @@ export default function CompaniesPage() {
     source: 'SCRAPING' | 'LEAD' | 'EVENT' | 'REFERRAL'
     assignedCoordinatorId: string
     mouDocumentUrl: string
+    mouStartDate: string
+    mouEndDate: string
+    commercialPercent: string
     paymentTerms: string
     hrContacts: Array<{
       _id?: string
@@ -338,6 +407,9 @@ export default function CompaniesPage() {
     source: 'SCRAPING',
     assignedCoordinatorId: 'system',
     mouDocumentUrl: '',
+    mouStartDate: '',
+    mouEndDate: '',
+    commercialPercent: '',
     paymentTerms: '',
     hrContacts: [
       {
@@ -384,9 +456,26 @@ export default function CompaniesPage() {
     setIsLoading(false)
   }
 
+  const loadExportJobs = useCallback(async () => {
+    if (!session?.user?.id) return
+
+    setIsLoadingExportJobs(true)
+    const result = await listExportJobsAction({ entityType: 'COMPANY', limit: 5 })
+    if (result.success) {
+      setExportJobs(normalizeExportJobs(result.data))
+    }
+    setIsLoadingExportJobs(false)
+  }, [session?.user?.id])
+
   useEffect(() => {
     fetchCompanies()
   }, [])
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      loadExportJobs()
+    }
+  }, [session?.user?.id, loadExportJobs])
 
   const sectors = useMemo(() => {
     const unique = new Set<string>(sectorOptions.map((s) => s.value))
@@ -440,12 +529,19 @@ export default function CompaniesPage() {
     return result
   }, [companies, searchQuery, filterStatus, filterSector, sortBy, showExpiringOnly])
 
-  const stats = useMemo(() => ({
-    total: companies.length,
-    signed: companies.filter((c) => c.mouStatus === 'SIGNED').length,
-    inProgress: companies.filter((c) => c.mouStatus === 'IN_PROGRESS').length,
-    activeReqs: companies.reduce((acc, c) => acc + c.activeRequirements, 0),
-  }), [companies])
+  const stats = useMemo(() => {
+    const signed = companies.filter((company) => company.mouStatus === 'SIGNED').length
+    const activeSigned = companies.filter((company) => hasActiveRequirementMou(company)).length
+
+    return {
+      total: companies.length,
+      signed,
+      activeSigned,
+      signedInactive: Math.max(0, signed - activeSigned),
+      inProgress: companies.filter((company) => company.mouStatus === 'IN_PROGRESS').length,
+      activeReqs: companies.reduce((acc, company) => acc + company.activeRequirements, 0),
+    }
+  }, [companies])
 
   const resetForm = () => {
     setFormState({
@@ -459,6 +555,9 @@ export default function CompaniesPage() {
       source: 'SCRAPING',
       assignedCoordinatorId: 'system',
       mouDocumentUrl: '',
+      mouStartDate: '',
+      mouEndDate: '',
+      commercialPercent: '',
       paymentTerms: '',
       hrContacts: [
         { name: '', email: '', phone: '', linkedIn: '', designation: '', isPrimary: true },
@@ -492,6 +591,11 @@ export default function CompaniesPage() {
       source: company.source,
       assignedCoordinatorId: company.assignedCoordinatorId || '',
       mouDocumentUrl: company.mouDocumentUrl || '',
+      mouStartDate: toDateInputValue(company.mouStartDate),
+      mouEndDate: toDateInputValue(company.mouEndDate),
+      commercialPercent: company.commercialPercent === null || company.commercialPercent === undefined
+        ? ''
+        : String(company.commercialPercent),
       paymentTerms: company.paymentTerms || '',
       hrContacts:
         (company.contacts && company.contacts.length
@@ -536,11 +640,6 @@ export default function CompaniesPage() {
       toast.error('Missing coordinator', 'Assigned coordinator is required')
       return
     }
-    if (formState.mouStatus === 'SIGNED' && !formState.mouDocumentUrl.trim()) {
-      toast.error('MOU document required', 'Provide MOU document URL when status is Signed')
-      return
-    }
-
     const preparedContacts = formState.hrContacts
       .map((c) => ({
         name: c.name.trim(),
@@ -569,6 +668,43 @@ export default function CompaniesPage() {
       return
     }
 
+    const mouStartDate = parseDateInput(formState.mouStartDate)
+    const mouEndDate = parseDateInput(formState.mouEndDate)
+    const commercialPercent = formState.commercialPercent.trim().length > 0
+      ? Number(formState.commercialPercent)
+      : undefined
+
+    if (formState.mouStatus === 'SIGNED') {
+      if (!formState.mouDocumentUrl.trim()) {
+        toast.error('MOU document required', 'Provide MOU document URL when status is Signed')
+        return
+      }
+      if (!mouStartDate || !mouEndDate) {
+        toast.error('MOU dates required', 'Provide MOU start and end dates when status is Signed')
+        return
+      }
+      if (mouStartDate >= mouEndDate) {
+        toast.error('Invalid MOU dates', 'MOU end date must be after the start date')
+        return
+      }
+      if (commercialPercent === undefined || Number.isNaN(commercialPercent) || commercialPercent < 0 || commercialPercent > 100) {
+        toast.error('Invalid commercial percent', 'Set a commercial percentage between 0 and 100 for signed MOU')
+        return
+      }
+    }
+
+    const mouPayload = formState.mouStatus === 'SIGNED'
+      ? {
+        mouStartDate,
+        mouEndDate,
+        commercialPercent,
+      }
+      : {
+        mouStartDate: undefined,
+        mouEndDate: undefined,
+        commercialPercent: undefined,
+      }
+
     setIsSaving(true)
 
     if (editingId) {
@@ -584,6 +720,7 @@ export default function CompaniesPage() {
         source: formState.source,
         assignedCoordinatorId: formState.assignedCoordinatorId,
         mouDocumentUrl: formState.mouDocumentUrl || undefined,
+        ...mouPayload,
         paymentTerms: formState.paymentTerms || undefined,
         hrContacts: preparedContacts,
       })
@@ -606,6 +743,7 @@ export default function CompaniesPage() {
         source: formState.source,
         assignedCoordinatorId: formState.assignedCoordinatorId,
         mouDocumentUrl: formState.mouDocumentUrl || undefined,
+        ...mouPayload,
         paymentTerms: formState.paymentTerms || undefined,
         hrContacts: preparedContacts,
       })
@@ -663,6 +801,7 @@ export default function CompaniesPage() {
     })
     if (res.success) {
       toast.success('Export Started', 'You will be notified when it is ready')
+      loadExportJobs()
     } else {
       toast.error('Export Failed', res.error || 'Could not start export')
     }
@@ -702,17 +841,60 @@ export default function CompaniesPage() {
             <p className="text-2xl font-bold text-[var(--foreground)] mt-1">{stats.total}</p>
           </div>
           <div className="p-4 rounded-2xl backdrop-blur-md border border-white/20 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-300 bg-emerald-50/50 dark:bg-emerald-900/20">
-            <p className="text-sm text-[var(--foreground-muted)]">MOU Signed</p>
+            <p className="text-sm text-[var(--foreground-muted)]">MOU Signed (Status)</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.signed}</p>
+            <p className="text-xs text-emerald-700/80 dark:text-emerald-300 mt-1">Eligible in Add Requirement: {stats.activeSigned}</p>
           </div>
           <div className="p-4 rounded-2xl backdrop-blur-md border border-white/20 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-300 bg-amber-50/50 dark:bg-amber-900/20">
             <p className="text-sm text-[var(--foreground-muted)]">MOU In Progress</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">{stats.inProgress}</p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-300 mt-1">Signed but inactive/expired: {stats.signedInactive}</p>
           </div>
           <div className="p-4 rounded-2xl backdrop-blur-md border border-white/20 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-300 bg-purple-50/50 dark:bg-purple-900/20">
             <p className="text-sm text-[var(--foreground-muted)]">Active Requirements</p>
             <p className="text-2xl font-bold text-[var(--accent)] mt-1">{stats.activeReqs}</p>
           </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-lg shadow-slate-200/50 dark:shadow-black/20">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <p className="text-sm font-semibold text-[var(--foreground)]">Recent Company Exports</p>
+            <Button variant="ghost" size="sm" onClick={loadExportJobs}>Refresh</Button>
+          </div>
+          {isLoadingExportJobs && (
+            <p className="text-sm text-[var(--foreground-muted)]">Loading export jobs...</p>
+          )}
+          {!isLoadingExportJobs && exportJobs.length === 0 && (
+            <p className="text-sm text-[var(--foreground-muted)]">No export jobs yet.</p>
+          )}
+          {!isLoadingExportJobs && exportJobs.length > 0 && (
+            <div className="space-y-2">
+              {exportJobs.map((job) => (
+                <div key={job._id} className="rounded-lg border border-[var(--border)] px-3 py-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--foreground-muted)] truncate">{job._id}</p>
+                    <p className="text-xs text-[var(--foreground-muted)]">{job.createdAt ? new Date(job.createdAt).toLocaleString('en-US') : 'Unknown time'} • {job.format}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn(
+                      'text-xs font-semibold',
+                      job.status === 'COMPLETED' && 'text-emerald-600',
+                      job.status === 'FAILED' && 'text-rose-600',
+                      (job.status === 'PENDING' || job.status === 'PROCESSING') && 'text-amber-600'
+                    )}>
+                      {job.status}
+                    </p>
+                    {job.status === 'COMPLETED' && job.fileUrl && (
+                      <a href={job.fileUrl} className="text-xs text-indigo-600 hover:underline" target="_blank" rel="noopener noreferrer">Download</a>
+                    )}
+                    {job.status === 'FAILED' && job.errorMessage && (
+                      <p className="text-xs text-rose-600 truncate max-w-48">{job.errorMessage}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="p-5 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-lg shadow-slate-200/50 dark:shadow-black/20">
@@ -897,6 +1079,17 @@ export default function CompaniesPage() {
                       {selectedCompany.paymentTerms && (
                         <p className="text-xs text-[var(--foreground-muted)] mt-1 whitespace-pre-line">
                           {selectedCompany.paymentTerms}
+                        </p>
+                      )}
+                      <p className="text-xs text-[var(--foreground-muted)] mt-2">
+                        Start: {toDateInputValue(selectedCompany.mouStartDate) || 'Not set'}
+                      </p>
+                      <p className="text-xs text-[var(--foreground-muted)]">
+                        End: {toDateInputValue(selectedCompany.mouEndDate) || 'Not set'}
+                      </p>
+                      {selectedCompany.commercialPercent !== null && selectedCompany.commercialPercent !== undefined && (
+                        <p className="text-xs text-[var(--foreground-muted)]">
+                          Commercial: {selectedCompany.commercialPercent}%
                         </p>
                       )}
                     </>
@@ -1094,6 +1287,44 @@ export default function CompaniesPage() {
                   onChange={(e) => setFormState((s) => ({ ...s, mouDocumentUrl: e.target.value }))}
                 />
               </div>
+              {formState.mouStatus === 'SIGNED' && (
+                <>
+                  <div>
+                    <label htmlFor="mou-start-date" className="block text-sm font-semibold text-[var(--foreground-muted)] mb-1.5">MOU Start Date *</label>
+                    <input
+                      id="mou-start-date"
+                      className="input-modern"
+                      type="date"
+                      value={formState.mouStartDate}
+                      onChange={(e) => setFormState((s) => ({ ...s, mouStartDate: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="mou-end-date" className="block text-sm font-semibold text-[var(--foreground-muted)] mb-1.5">MOU End Date *</label>
+                    <input
+                      id="mou-end-date"
+                      className="input-modern"
+                      type="date"
+                      value={formState.mouEndDate}
+                      onChange={(e) => setFormState((s) => ({ ...s, mouEndDate: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="commercial-percent" className="block text-sm font-semibold text-[var(--foreground-muted)] mb-1.5">Commercial % *</label>
+                    <input
+                      id="commercial-percent"
+                      className="input-modern"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      placeholder="e.g., 8.5"
+                      value={formState.commercialPercent}
+                      onChange={(e) => setFormState((s) => ({ ...s, commercialPercent: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
               <div className="col-span-2">
                 <label htmlFor="payment-terms" className="block text-sm font-semibold text-[var(--foreground-muted)] mb-1.5">Payment Terms</label>
                 <textarea

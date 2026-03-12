@@ -1,8 +1,15 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { format } from 'date-fns'
 import { generateReportAction } from '@/lib/actions/module12-reporting'
+import {
+  createReportScheduleAction,
+  getAnalyticsSummaryAction,
+  listReportSchedulesAction,
+  recordAnalyticsEventAction,
+  toggleReportScheduleAction,
+} from '@/lib/actions/module11-analytics-reporting'
 import InteractiveButton from '@/components/ui/InteractiveButton'
 import {
   BarChart3,
@@ -15,10 +22,30 @@ import {
   Calendar,
   Filter,
   FileSpreadsheet,
+  RefreshCw,
+  CalendarClock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type ReportType = 'dailyActivity' | 'requirementStatus' | 'candidatePipeline' | 'timesheet' | 'sourceConversion'
+
+type ReportFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY'
+
+interface ReportScheduleItem {
+  _id: string
+  name: string
+  reportType: string
+  frequency: ReportFrequency
+  recipients: string[]
+  isActive: boolean
+  lastRunAt?: string
+}
+
+interface AnalyticsSummaryPoint {
+  day: string
+  total: number
+  count: number
+}
 
 const reportTypes: { type: ReportType; label: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -92,10 +119,20 @@ export default function ReportBuilder() {
   const [data, setData] = useState<unknown>(null)
   const [csvUrl, setCsvUrl] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(false)
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false)
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [schedules, setSchedules] = useState<ReportScheduleItem[]>([])
+  const [scheduleName, setScheduleName] = useState('')
+  const [scheduleFrequency, setScheduleFrequency] = useState<ReportFrequency>('WEEKLY')
+  const [scheduleRecipients, setScheduleRecipients] = useState('')
+  const [scheduleActive, setScheduleActive] = useState(true)
+  const [analyticsMetric, setAnalyticsMetric] = useState(`report.${reportType}.run`)
+  const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummaryPoint[]>([])
 
   // Reset filters when report type changes
-  useMemo(() => {
+  useEffect(() => {
     setActivityType('')
     setStatus('')
     setCompanyId('')
@@ -103,7 +140,112 @@ export default function ReportBuilder() {
     setData(null)
     setCsvUrl(null)
     setError(null)
+    const nextMetric = `report.${reportType}.run`
+    setAnalyticsMetric(nextMetric)
+    setScheduleName('')
   }, [reportType])
+
+  const loadSchedules = async () => {
+    setIsLoadingSchedules(true)
+    try {
+      const response = await listReportSchedulesAction({})
+      if (!response.success) {
+        setError(response.error || 'Failed to load report schedules')
+        return
+      }
+
+      const rows = Array.isArray(response.data) ? response.data : []
+      const normalized: ReportScheduleItem[] = []
+
+      for (const row of rows) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+
+        const record = row as Record<string, unknown>
+        const id = typeof record._id === 'string' ? record._id : ''
+        if (!id) continue
+
+        const schedule: ReportScheduleItem = {
+          _id: id,
+          name: typeof record.name === 'string' ? record.name : 'Unnamed Schedule',
+          reportType: typeof record.reportType === 'string' ? record.reportType : 'Unknown',
+          frequency: (record.frequency as ReportFrequency) || 'WEEKLY',
+          recipients: Array.isArray(record.recipients)
+            ? record.recipients.filter((item): item is string => typeof item === 'string')
+            : [],
+          isActive: Boolean(record.isActive),
+        }
+
+        if (typeof record.lastRunAt === 'string') {
+          schedule.lastRunAt = record.lastRunAt
+        }
+
+        normalized.push(schedule)
+      }
+
+      setSchedules(normalized)
+    } catch {
+      setError('Unexpected error while loading report schedules')
+    } finally {
+      setIsLoadingSchedules(false)
+    }
+  }
+
+  const loadAnalyticsSummary = async (metric: string) => {
+    if (!metric.trim()) {
+      setAnalyticsSummary([])
+      return
+    }
+
+    setIsLoadingAnalytics(true)
+    try {
+      const response = await getAnalyticsSummaryAction({
+        metric,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+      })
+
+      if (!response.success) {
+        setError(response.error || 'Failed to load analytics summary')
+        return
+      }
+
+      const rows = Array.isArray(response.data) ? response.data : []
+      const normalized = rows
+        .map((row) => {
+          if (!row || typeof row !== 'object' || Array.isArray(row)) return null
+          const record = row as Record<string, unknown>
+          const idRecord =
+            record._id && typeof record._id === 'object' && !Array.isArray(record._id)
+              ? (record._id as Record<string, unknown>)
+              : null
+
+          const day = typeof idRecord?.day === 'string' ? idRecord.day : ''
+          if (!day) return null
+
+          return {
+            day,
+            total: typeof record.total === 'number' ? record.total : 0,
+            count: typeof record.count === 'number' ? record.count : 0,
+          }
+        })
+        .filter((row): row is AnalyticsSummaryPoint => Boolean(row))
+
+      setAnalyticsSummary(normalized)
+    } catch {
+      setError('Unexpected error while loading analytics summary')
+    } finally {
+      setIsLoadingAnalytics(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSchedules()
+  }, [])
+
+  useEffect(() => {
+    if (!analyticsMetric) return
+    loadAnalyticsSummary(analyticsMetric)
+  }, [analyticsMetric])
 
   const previewRows = useMemo(() => {
     if (!data) return []
@@ -136,6 +278,16 @@ export default function ReportBuilder() {
         setError(res.error || 'Failed to generate report')
         return
       }
+
+      await recordAnalyticsEventAction({
+        metric: `report.${reportType}.run`,
+        entityType: 'Report',
+        entityId: reportType,
+        value: 1,
+        occurredAt: new Date(),
+        metadata: { format: formatType },
+      })
+
       if (formatType === 'csv' && (res as any).csv) {
         const blob = new Blob([(res as any).csv], { type: 'text/csv' })
         const url = URL.createObjectURL(blob)
@@ -144,7 +296,66 @@ export default function ReportBuilder() {
         setData(res.data)
         setCsvUrl(null)
       }
+
+      await loadAnalyticsSummary(`report.${reportType}.run`)
     })
+  }
+
+  const createSchedule = async () => {
+    setError(null)
+    const recipients = scheduleRecipients
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+    if (!scheduleName.trim() || recipients.length === 0) {
+      setError('Schedule name and at least one recipient email are required')
+      return
+    }
+
+    setIsSavingSchedule(true)
+    try {
+      const response = await createReportScheduleAction({
+        name: scheduleName.trim(),
+        reportType,
+        frequency: scheduleFrequency,
+        recipients,
+        filters: {
+          from: from || undefined,
+          to: to || undefined,
+          activityType: activityType || undefined,
+          status: status || undefined,
+          companyId: companyId || undefined,
+          userId: userId || undefined,
+        },
+        isActive: scheduleActive,
+      })
+
+      if (!response.success) {
+        setError(response.error || 'Failed to create report schedule')
+        return
+      }
+
+      setScheduleName('')
+      setScheduleRecipients('')
+      setScheduleActive(true)
+      await loadSchedules()
+    } catch {
+      setError('Unexpected error while creating report schedule')
+    } finally {
+      setIsSavingSchedule(false)
+    }
+  }
+
+  const toggleSchedule = async (scheduleId: string, isActive: boolean) => {
+    const previous = schedules
+    setSchedules((rows) => rows.map((row) => (row._id === scheduleId ? { ...row, isActive } : row)))
+
+    const response = await toggleReportScheduleAction({ scheduleId, isActive })
+    if (!response.success) {
+      setSchedules(previous)
+      setError(response.error || 'Failed to update schedule status')
+    }
   }
 
   const renderCell = (value: unknown) => {
@@ -358,6 +569,155 @@ export default function ReportBuilder() {
             Download CSV
           </a>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="bg-white border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-indigo-600" />
+            <h3 className="font-semibold text-[var(--foreground)]">Report Automation</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              className="input-modern"
+              placeholder="Schedule name"
+              value={scheduleName}
+              onChange={(event) => setScheduleName(event.target.value)}
+            />
+            <select
+              className="select-modern w-full"
+              value={scheduleFrequency}
+              onChange={(event) => setScheduleFrequency(event.target.value as ReportFrequency)}
+            >
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+
+          <input
+            className="input-modern"
+            placeholder="Recipients (comma-separated emails)"
+            value={scheduleRecipients}
+            onChange={(event) => setScheduleRecipients(event.target.value)}
+          />
+
+          <label className="inline-flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
+            <input
+              type="checkbox"
+              checked={scheduleActive}
+              onChange={(event) => setScheduleActive(event.target.checked)}
+            />
+            Enable immediately
+          </label>
+
+          <div className="flex items-center gap-2">
+            <InteractiveButton
+              onClick={createSchedule}
+              isLoading={isSavingSchedule}
+              loadingText="Saving..."
+              variant="primary"
+              size="md"
+            >
+              Save Schedule
+            </InteractiveButton>
+            <InteractiveButton
+              onClick={() => loadSchedules()}
+              isLoading={isLoadingSchedules}
+              variant="secondary"
+              size="md"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reload
+            </InteractiveButton>
+          </div>
+
+          <div className="space-y-2">
+            {schedules.length === 0 && (
+              <p className="text-sm text-[var(--foreground-muted)]">No report schedules created yet.</p>
+            )}
+
+            {schedules.map((schedule) => (
+              <div
+                key={schedule._id}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 flex items-center justify-between gap-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-[var(--foreground)]">{schedule.name}</p>
+                  <p className="text-xs text-[var(--foreground-muted)]">
+                    {schedule.reportType} • {schedule.frequency} • {schedule.recipients.length} recipient(s)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={cn(
+                    'text-xs px-2.5 py-1 rounded-md border transition-colors',
+                    schedule.isActive
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-600'
+                  )}
+                  onClick={() => toggleSchedule(schedule._id, !schedule.isActive)}
+                >
+                  {schedule.isActive ? 'Active' : 'Paused'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-indigo-600" />
+            <h3 className="font-semibold text-[var(--foreground)]">Analytics Snapshot</h3>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              className="input-modern"
+              value={analyticsMetric}
+              onChange={(event) => setAnalyticsMetric(event.target.value)}
+              placeholder="Metric key (e.g. report.dailyActivity.run)"
+            />
+            <InteractiveButton
+              onClick={() => loadAnalyticsSummary(analyticsMetric)}
+              isLoading={isLoadingAnalytics}
+              variant="secondary"
+              size="md"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </InteractiveButton>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  <th className="text-left py-2 text-[var(--foreground-muted)] font-medium">Day</th>
+                  <th className="text-left py-2 text-[var(--foreground-muted)] font-medium">Total</th>
+                  <th className="text-left py-2 text-[var(--foreground-muted)] font-medium">Events</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analyticsSummary.map((point) => (
+                  <tr key={point.day} className="border-b border-[var(--border)]">
+                    <td className="py-2 text-[var(--foreground)]">{point.day}</td>
+                    <td className="py-2 text-[var(--foreground)]">{point.total}</td>
+                    <td className="py-2 text-[var(--foreground)]">{point.count}</td>
+                  </tr>
+                ))}
+                {analyticsSummary.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-[var(--foreground-muted)]" colSpan={3}>
+                      {isLoadingAnalytics ? 'Loading analytics...' : 'No analytics data found for this metric.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Error */}

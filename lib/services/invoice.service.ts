@@ -3,6 +3,7 @@ import connectDB from "@/lib/db/mongodb"
 import Invoice from "@/lib/db/models/Invoice"
 import Company from "@/lib/db/models/Company"
 import Placement from "@/lib/db/models/Placement"
+import Candidate from "@/lib/db/models/Candidate"
 import AuditLog from "@/lib/db/models/AuditLog"
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/core/app-error"
 import { serializeDoc } from "@/lib/utils/serialize"
@@ -16,6 +17,8 @@ export const CreateInvoiceSchema = z.object({
     placementId: z.string().optional(),
     amount: z.number().positive(),
     currency: z.string().default('INR'),
+    issueDate: z.coerce.date().optional(),
+    dueDate: z.coerce.date().optional(),
 })
 
 export const UpdateInvoiceStatusSchema = z.object({
@@ -47,6 +50,15 @@ export class InvoiceService {
         if (!company) throw new NotFoundError("Company not found")
 
         let feeAmount = data.amount
+        const issueDate = data.issueDate ?? new Date()
+        const dueDate = data.dueDate
+            ? new Date(data.dueDate)
+            : new Date(issueDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+
+        if (dueDate < issueDate) {
+            throw new AppError("Due date cannot be before issue date")
+        }
+
         if (data.placementId) {
             const placement = await Placement.findById(data.placementId)
             if (!placement) throw new NotFoundError("Placement not found")
@@ -58,12 +70,22 @@ export class InvoiceService {
             }
         }
 
+        const invoicePrefix = `INV-${issueDate.getUTCFullYear()}`
+        const yearlySequence = await Invoice.countDocuments({
+            invoiceNumber: { $regex: `^${invoicePrefix}-` },
+        })
+        const invoiceNumber = `${invoicePrefix}-${String(yearlySequence + 1).padStart(5, '0')}`
+
         const invoice = await Invoice.create({
+            invoiceNumber,
             companyId: data.companyId,
             requirementId: data.requirementId ?? null,
+            placementId: data.placementId ?? null,
             amount: feeAmount,
             currency: data.currency,
             status: 'DRAFT',
+            issueDate,
+            dueDate,
         })
 
         await AuditLog.create({
@@ -71,7 +93,7 @@ export class InvoiceService {
             action: "INVOICE_CREATED",
             entity: "Invoice",
             entityId: invoice._id.toString(),
-            newValue: { companyId: data.companyId, amount: feeAmount },
+            newValue: { companyId: data.companyId, amount: feeAmount, invoiceNumber },
         })
 
         return serializeDoc(invoice.toObject())
@@ -86,7 +108,12 @@ export class InvoiceService {
         await connectDB()
 
         const query: Record<string, unknown> = {}
-        if (filters?.status) query.status = filters.status
+        if (filters?.status === 'OVERDUE') {
+            query.status = 'SENT'
+            query.dueDate = { $lt: new Date() }
+        } else if (filters?.status) {
+            query.status = filters.status
+        }
         if (filters?.companyId) query.companyId = filters.companyId
 
         const invoices = await Invoice.find(query).sort({ createdAt: -1 }).lean()
@@ -96,11 +123,36 @@ export class InvoiceService {
         const companies = await Company.find({ _id: { $in: companyIds } }).lean()
         const companyMap = Object.fromEntries(companies.map(c => [c._id.toString(), c]))
 
+        const placementIds = [...new Set(invoices
+            .map(i => i.placementId?.toString())
+            .filter((id): id is string => Boolean(id)))]
+
+        const placements = placementIds.length > 0
+            ? await Placement.find({ _id: { $in: placementIds } }).lean()
+            : []
+        const placementMap = Object.fromEntries(placements.map(p => [p._id.toString(), p]))
+
+        const candidateIds = [...new Set(placements.map(p => p.candidateId.toString()))]
+        const candidates = candidateIds.length > 0
+            ? await Candidate.find({ _id: { $in: candidateIds } }).select('name').lean()
+            : []
+        const candidateMap = Object.fromEntries(candidates.map(c => [c._id.toString(), c]))
+
+        const now = new Date()
+
         return invoices.map(i => ({
             ...serializeDoc(i),
+            status: i.status === 'SENT' && i.dueDate && new Date(i.dueDate) < now ? 'OVERDUE' : i.status,
             company: companyMap[i.companyId.toString()] ? {
                 _id: companyMap[i.companyId.toString()]._id.toString(),
                 name: companyMap[i.companyId.toString()].name,
+            } : null,
+            placement: i.placementId && placementMap[i.placementId.toString()] ? {
+                _id: placementMap[i.placementId.toString()]._id.toString(),
+                candidate: candidateMap[placementMap[i.placementId.toString()].candidateId.toString()] ? {
+                    _id: candidateMap[placementMap[i.placementId.toString()].candidateId.toString()]._id.toString(),
+                    name: candidateMap[placementMap[i.placementId.toString()].candidateId.toString()].name,
+                } : null,
             } : null,
         }))
     }
@@ -224,10 +276,8 @@ export class InvoiceService {
             Invoice.aggregate([
                 {
                     $match: {
-                        $or: [
-                            { status: 'OVERDUE' },
-                            { status: 'SENT', dueDate: { $lt: now } }
-                        ]
+                        status: 'SENT',
+                        dueDate: { $lt: now }
                     }
                 },
                 { $group: { _id: null, count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } }

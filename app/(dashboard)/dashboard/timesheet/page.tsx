@@ -61,6 +61,7 @@ interface DaySummary {
 
 interface Requirement {
   id: string
+  mmdId?: string
   title: string
   company: string
 }
@@ -245,6 +246,7 @@ export default function TimesheetPage() {
       setRequirements(
         result.data.map((r: any) => ({
           id: r.id,
+          mmdId: r.mmdId,
           title: r.title,
           company: r.company,
         }))
@@ -672,7 +674,7 @@ export default function TimesheetPage() {
                 <option value="">No specific requirement</option>
                 {requirements.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.title} - {r.company}
+                    {r.mmdId ? `${r.mmdId} • ` : ''}{r.title} - {r.company}
                   </option>
                 ))}
               </select>

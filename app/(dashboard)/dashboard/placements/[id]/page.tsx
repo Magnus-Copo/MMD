@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import {
     ArrowLeft,
@@ -50,6 +50,7 @@ type EditPlacementFormValues = z.infer<typeof EditPlacementSchema>
 
 export default function PlacementDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const { id } = use(params)
     const { data: session } = useSession()
     const toast = useToast()
@@ -62,6 +63,12 @@ export default function PlacementDetailsPage({ params }: { params: Promise<{ id:
 
     const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR']
     const canEdit = session?.user && allowedRoles.includes(session.user.role)
+
+    useEffect(() => {
+        if (searchParams.get('edit') === '1' && canEdit) {
+            setIsEditing(true)
+        }
+    }, [searchParams, canEdit])
 
     const form = useForm<EditPlacementFormValues>({
         resolver: zodResolver(EditPlacementSchema),

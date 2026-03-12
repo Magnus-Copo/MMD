@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   Briefcase,
   AlertTriangle,
@@ -43,9 +44,17 @@ interface Metrics {
     _id: string
     summary: string
     requirementMmdId?: string
+    requirementTitle?: string
     requirementId?: string
     nextFollowUpDate: Date | string
     isOverdue?: boolean
+  }[]
+  redZone?: {
+    id: string
+    title: string
+    detail: string
+    href: string
+    severity: 'high' | 'medium'
   }[]
 }
 
@@ -55,7 +64,7 @@ interface CoordinatorDashboardProps {
 }
 
 export function CoordinatorDashboard({ metrics, userName }: Readonly<CoordinatorDashboardProps>) {
-  const { kpis, requirementsFunnel, recentActivities, urgentFollowUps } = metrics
+  const { kpis, requirementsFunnel, recentActivities, urgentFollowUps, redZone = [] } = metrics
 
   return (
     <div className="space-y-8 text-[var(--foreground)] relative">
@@ -147,21 +156,25 @@ export function CoordinatorDashboard({ metrics, userName }: Readonly<Coordinator
               </div>
 
               <div className="space-y-3 relative z-10">
-                 <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-rose-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                       <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                       <span className="font-semibold text-slate-700 group-hover:text-rose-600 transition-colors">Acme Corp</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold">45 Days Inactive</span>
-                 </div>
-                 
-                 <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-rose-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                       <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                       <span className="font-semibold text-slate-700 group-hover:text-rose-600 transition-colors">Terra Systems</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold">62 Days Inactive</span>
-                 </div>
+                {redZone.length === 0 ? (
+                  <p className="rounded-xl border border-rose-100 bg-white px-4 py-3 text-sm text-slate-600">
+                    No urgent client-health alerts right now.
+                  </p>
+                ) : (
+                  redZone.slice(0, 4).map((item) => (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="flex justify-between items-center bg-white p-4 rounded-xl border border-rose-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                        <span className="font-semibold text-slate-700 group-hover:text-rose-600 transition-colors">{item.title}</span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold">{item.detail}</span>
+                    </Link>
+                  ))
+                )}
               </div>
            </div>
         </div>
@@ -170,6 +183,8 @@ export function CoordinatorDashboard({ metrics, userName }: Readonly<Coordinator
             <FollowUpList
               followUps={urgentFollowUps}
               title="Team Priority Follow-ups"
+              maxItems={8}
+              viewAllHref="/dashboard/activities"
             />
         </div>
       </div>
@@ -180,6 +195,8 @@ export function CoordinatorDashboard({ metrics, userName }: Readonly<Coordinator
          activities={recentActivities}
          title="Recent Team Activity"
          showUser
+         maxItems={10}
+         viewAllHref="/dashboard/activities"
        />
       </div>
     </div>

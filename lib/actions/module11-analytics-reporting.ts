@@ -2,7 +2,7 @@
 
 import { createProtectedAction } from "@/lib/core/action-client"
 import { AnalyticsService, AnalyticsSummarySchema } from "@/lib/services/analytics.service"
-import { ReportingService, ToggleReportSchema } from "@/lib/services/reporting.service"
+import { ReportingService, RunScheduledReportsSchema, ToggleReportSchema } from "@/lib/services/reporting.service"
 import { AnalyticsEventSchema, ReportScheduleSchema } from "@/lib/validators/common"
 import { z } from "zod"
 
@@ -58,6 +58,22 @@ export const toggleReportScheduleAction = createProtectedAction(
       payload
     )
     return schedule
+  }
+)
+
+export const runScheduledReportsAction = createProtectedAction(
+  RunScheduledReportsSchema,
+  async (payload, session) => {
+    const normalizedPayload = {
+      ...payload,
+      limit: payload.limit ?? 25,
+    }
+
+    const summary = await ReportingService.runScheduledReports(
+      { id: session.user.id, role: session.user.role },
+      normalizedPayload
+    )
+    return summary
   }
 )
 

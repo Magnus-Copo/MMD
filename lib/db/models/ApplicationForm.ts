@@ -20,9 +20,6 @@ const ApplicationFormSchema = new Schema<IApplicationForm>(
   { timestamps: true }
 )
 
-ApplicationFormSchema.index({ requirementId: 1 }, { unique: true })
-ApplicationFormSchema.index({ shareableUrl: 1 }, { unique: true })
-
 const ApplicationForm: Model<IApplicationForm> =
   mongoose.models.ApplicationForm || mongoose.model<IApplicationForm>('ApplicationForm', ApplicationFormSchema)
 

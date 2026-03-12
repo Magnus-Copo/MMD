@@ -8,6 +8,7 @@ import Activity from '@/lib/db/models/Activity'
 import { subDays } from 'date-fns'
 import { applyRequirementRBAC } from '@/lib/auth/rbac'
 import { getCurrentUser } from '@/lib/auth'
+import { RequirementService } from '@/lib/services/requirement.service'
 
 // Ensure Company schema is registered (used by populate)
 
@@ -22,6 +23,7 @@ export interface RequirementData {
     mmdId?: string
     status: string
     priority: string
+    group: 'RASHMI' | 'MANJUNATH' | 'SCRAPING' | 'LEADS'
     location: string
     locationType: string
     company: string
@@ -29,6 +31,8 @@ export interface RequirementData {
     budget: string
     openings: number
     skills: string[]
+    experienceMin: number
+    experienceMax: number
     description?: string
     deadline?: string
 }
@@ -57,6 +61,123 @@ function formatBudget(salaryMin?: number, salaryMax?: number): string {
     if (salaryMin) return `₹${(salaryMin / 100000).toFixed(1)}L+`
     return `Up to ₹${(salaryMax! / 100000).toFixed(1)}L`
 }
+
+function parseWorkMode(locationType: string | undefined): 'REMOTE' | 'HYBRID' | 'ONSITE' {
+    const normalized = (locationType || '').trim().toLowerCase()
+    if (normalized === 'hybrid') return 'HYBRID'
+    if (normalized === 'on-site' || normalized === 'onsite') return 'ONSITE'
+    return 'REMOTE'
+}
+
+function normalizeRequirementStatus(status: string | undefined) {
+    switch (status) {
+        case 'FILLED':
+            return 'CLOSED_HIRED'
+        case 'CANCELLED':
+            return 'CLOSED_NOT_HIRED'
+        default:
+            return status || 'ACTIVE'
+    }
+}
+
+function parseBudgetValue(token: string): number | undefined {
+    const normalized = token.replace(/,/g, '').trim().toLowerCase()
+    const numeric = Number.parseFloat(normalized)
+    if (!Number.isFinite(numeric)) return undefined
+
+    if (normalized.includes('cr')) return Math.round(numeric * 10000000)
+    if (normalized.includes('lac') || normalized.includes('lakh') || /\d(?:\.\d+)?l\b/.test(normalized)) {
+        return Math.round(numeric * 100000)
+    }
+    if (normalized.includes('k')) return Math.round(numeric * 1000)
+    return Math.round(numeric)
+}
+
+function parseBudgetRange(budget: string | undefined): { salaryMin?: number; salaryMax?: number } {
+    if (!budget?.trim()) return {}
+
+    const matches = budget.match(/\d+(?:\.\d+)?\s*(?:cr|crore|lac|lakh|l|k)?/gi) || []
+    const parsed = matches
+        .map(parseBudgetValue)
+        .filter((value): value is number => typeof value === 'number')
+
+    if (parsed.length >= 2) {
+        return { salaryMin: parsed[0], salaryMax: parsed[1] }
+    }
+    if (parsed.length === 1) {
+        if (/up to|max/i.test(budget)) {
+            return { salaryMax: parsed[0] }
+        }
+        return { salaryMin: parsed[0] }
+    }
+
+    return {}
+}
+
+function buildRequirementDescription(data: Pick<RequirementData, 'title' | 'company' | 'location' | 'budget' | 'skills' | 'description'>): string {
+    const explicitDescription = data.description?.trim()
+    if (explicitDescription && explicitDescription.length >= 50) {
+        return explicitDescription
+    }
+
+    const fallback = [
+        `Requirement for ${data.title} at ${data.company || 'the selected company'}.`,
+        `Location: ${data.location || 'To be confirmed'}.`,
+        `Budget: ${data.budget || 'To be finalized'}.`,
+        `Core skills: ${(data.skills.length > 0 ? data.skills : ['General hiring']).join(', ')}.`,
+        explicitDescription,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+
+    return fallback.length >= 50
+        ? fallback
+        : `${fallback} Additional hiring details will be added during intake.`.trim()
+}
+
+function transformRequirement(req: any) {
+    const company = req.companyId && typeof req.companyId === 'object'
+        ? req.companyId.name || 'Unknown Company'
+        : req.company || 'Unknown Company'
+    const companyId = req.companyId && typeof req.companyId === 'object'
+        ? req.companyId._id?.toString() || ''
+        : req.companyId?.toString() || ''
+    const owner = req.accountOwnerId && typeof req.accountOwnerId === 'object'
+        ? req.accountOwnerId.name || 'Unassigned'
+        : req.owner || 'Unassigned'
+
+    return {
+        ...req,
+        id: req._id.toString(),
+        _id: req._id.toString(),
+        title: req.jobTitle || req.title || 'Untitled Position',
+        owner,
+        company,
+        companyId,
+        filledPositions: req.filledPositions ?? 0,
+        submissions: req.submissions ?? 0,
+        interviews: req.interviews ?? 0,
+        priority: req.priority || 'Medium',
+        locationType: formatWorkMode(req.workMode),
+        budget: formatBudget(req.salaryMin, req.salaryMax),
+        status: req.status || 'ACTIVE',
+        openings: req.openings ?? 1,
+        description: req.fullDescription || req.description,
+        deadline: req.interviewClosingDate
+            ? new Date(req.interviewClosingDate).toISOString().slice(0, 10)
+            : req.deadline,
+        experienceMin: req.experienceMin ?? 0,
+        experienceMax: req.experienceMax ?? 0,
+    }
+}
+
+    function getActionErrorMessage(error: unknown, fallback: string) {
+        if (error instanceof Error && error.message) {
+            return error.message
+        }
+        return fallback
+    }
 
 export async function getRequirements(filters: any = {}) {
     try {
@@ -111,29 +232,11 @@ export async function getRequirements(filters: any = {}) {
                 ['ACTIVE', 'SOURCING', 'INTERVIEWING'].includes(req.status || '') &&
                 lastActivity <= stalledCutoff
 
-            return {
+            return transformRequirement({
                 ...req,
-                id: req._id.toString(),
-                // Map jobTitle to title (frontend field name)
-                title: req.jobTitle || req.title || 'Untitled Position',
-                owner: req.accountOwnerId?.name || 'Unassigned',
-                company: req.companyId?.name || req.companyId || 'Unknown Company',
-                // Provide defaults for fields not in DB to prevent NaN
-                filledPositions: req.filledPositions ?? 0,
-                submissions: req.submissions ?? 0,
-                interviews: req.interviews ?? 0,
-                priority: req.priority || 'Medium',
-                // Map workMode to locationType display format
-                locationType: formatWorkMode(req.workMode),
-                // Format budget from salary range
-                budget: req.budget || formatBudget(req.salaryMin, req.salaryMax),
-                // Ensure status is provided
-                status: req.status || 'ACTIVE',
-                // Ensure openings has a default
-                openings: req.openings ?? 1,
                 lastActivityAt: lastActivity,
                 stalled,
-            }
+            })
         })
 
         const filteredByStalled = filters.stalled ? transformed.filter((req: any) => req.stalled) : transformed
@@ -141,7 +244,7 @@ export async function getRequirements(filters: any = {}) {
         return { success: true, data: JSON.parse(JSON.stringify(filteredByStalled)) }
     } catch (error) {
         console.error('Error fetching requirements:', error)
-        return { success: false, error: 'Failed to fetch requirements' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to fetch requirements') }
     }
 }
 
@@ -155,25 +258,43 @@ export async function createRequirement(data: RequirementData) {
 
         await connectDB()
 
-        // Generate ID if missing (or let DB/Schema handle it?)
-        // Schema doesn't auto-gen mmdId easily, we might need logic. 
-        // For now, trust input or generate simple one.
-        const mmdId = data.mmdId || `MMD-R-${Date.now().toString().slice(-4)}`
+        const payload = {
+            companyId: data.companyId,
+            jobTitle: data.title.trim(),
+            fullDescription: buildRequirementDescription(data),
+            skills: data.skills.length > 0 ? data.skills : ['General hiring'],
+            experienceMin: data.experienceMin,
+            experienceMax: data.experienceMax,
+            ...parseBudgetRange(data.budget),
+            openings: data.openings,
+            workMode: parseWorkMode(data.locationType),
+            location: data.location.trim() || 'Remote',
+            interviewClosingDate: data.deadline ? new Date(data.deadline) : undefined,
+            group: data.group,
+            accountOwnerId: user.id,
+            status: normalizeRequirementStatus(data.status) as any,
+        }
 
-        const newRequirement = await Requirement.create({
-            ...data,
-            mmdId,
-            createdBy: user.id,
-            accountOwnerId: user.id, // Default to creator
-            group: 'GENERAL', // Default group
-        })
+        const newRequirement = await RequirementService.create(
+            { id: user.id, role: user.role },
+            payload as any
+        )
+
+        const created = await Requirement.findById(newRequirement._id)
+            .populate('accountOwnerId', 'name')
+            .populate('companyId', 'name')
+            .lean()
+
+        if (!created) {
+            throw new Error('Requirement created but could not be reloaded')
+        }
 
         revalidatePath('/dashboard/requirements')
         revalidatePath('/dashboard')
-        return { success: true, data: JSON.parse(JSON.stringify(newRequirement)) }
+        return { success: true, data: JSON.parse(JSON.stringify(transformRequirement(created))) }
     } catch (error) {
         console.error('Error creating requirement:', error)
-        return { success: false, error: 'Failed to create requirement' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to create requirement') }
     }
 }
 
@@ -184,17 +305,70 @@ export async function updateRequirement(id: string, data: Partial<RequirementDat
 
         await connectDB()
 
-        const rbacFilter = applyRequirementRBAC(user, { _id: id })
-        const updated = await Requirement.findOneAndUpdate(rbacFilter, data, { new: true }).lean()
+        const rbacFilter = applyRequirementRBAC(user, { _id: id, deletedAt: null })
+        const existing = await Requirement.findOne(rbacFilter)
+            .populate('companyId', 'name')
+            .populate('accountOwnerId', 'name')
+            .lean()
 
-        if (!updated) throw new Error('Requirement not found or permission denied')
+        if (!existing) throw new Error('Requirement not found or permission denied')
+
+        const existingView = transformRequirement(existing)
+
+        const mergedForDescription: RequirementData = {
+            title: data.title ?? existing.jobTitle,
+            mmdId: existing.mmdId,
+            status: data.status ?? existing.status,
+            priority: data.priority ?? existingView.priority ?? 'Medium',
+            group: data.group ?? existing.group,
+            location: data.location ?? existing.location,
+            locationType: data.locationType ?? formatWorkMode(existing.workMode),
+            company: data.company ?? existingView.company,
+            companyId: data.companyId ?? existingView.companyId,
+            budget: data.budget ?? formatBudget(existing.salaryMin, existing.salaryMax),
+            openings: data.openings ?? existing.openings,
+            skills: data.skills ?? existing.skills,
+            experienceMin: data.experienceMin ?? existing.experienceMin,
+            experienceMax: data.experienceMax ?? existing.experienceMax,
+            description: data.description ?? existing.fullDescription,
+            deadline: data.deadline ?? (existing.interviewClosingDate ? new Date(existing.interviewClosingDate).toISOString().slice(0, 10) : undefined),
+        }
+
+        const mappedUpdate: Record<string, unknown> = {}
+
+        if (data.title !== undefined) mappedUpdate.jobTitle = data.title.trim()
+        if (data.description !== undefined) mappedUpdate.fullDescription = buildRequirementDescription(mergedForDescription)
+        if (data.skills !== undefined) mappedUpdate.skills = data.skills.length > 0 ? data.skills : ['General hiring']
+        if (data.experienceMin !== undefined) mappedUpdate.experienceMin = data.experienceMin
+        if (data.experienceMax !== undefined) mappedUpdate.experienceMax = data.experienceMax
+        if (data.budget !== undefined) Object.assign(mappedUpdate, parseBudgetRange(data.budget))
+        if (data.openings !== undefined) mappedUpdate.openings = data.openings
+        if (data.locationType !== undefined) mappedUpdate.workMode = parseWorkMode(data.locationType)
+        if (data.location !== undefined) mappedUpdate.location = data.location.trim()
+        if (data.deadline !== undefined && data.deadline) mappedUpdate.interviewClosingDate = new Date(data.deadline)
+        if (data.group !== undefined) mappedUpdate.group = data.group
+        if (data.companyId !== undefined) mappedUpdate.companyId = data.companyId
+        if (data.status !== undefined) mappedUpdate.status = normalizeRequirementStatus(data.status)
+
+        await RequirementService.update(
+            { id: user.id, role: user.role },
+            id,
+            mappedUpdate
+        )
+
+        const updated = await Requirement.findById(id)
+            .populate('accountOwnerId', 'name')
+            .populate('companyId', 'name')
+            .lean()
+
+        if (!updated) throw new Error('Requirement not found after update')
 
         revalidatePath('/dashboard/requirements')
         revalidatePath('/dashboard')
-        return { success: true, data: JSON.parse(JSON.stringify(updated)) }
+        return { success: true, data: JSON.parse(JSON.stringify(transformRequirement(updated))) }
     } catch (error) {
         console.error('Error updating requirement:', error)
-        return { success: false, error: 'Failed to update requirement' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to update requirement') }
     }
 }
 
@@ -203,20 +377,14 @@ export async function deleteRequirement(id: string) {
         const user = await getCurrentUser()
         if (!user) throw new Error('Unauthorized')
 
-        await connectDB()
-
-        const rbacFilter = applyRequirementRBAC(user, { _id: id })
-        // Soft delete
-        const deleted = await Requirement.findOneAndUpdate(rbacFilter, { deletedAt: new Date() }, { new: true })
-
-        if (!deleted) throw new Error('Requirement not found or permission denied')
+        await RequirementService.delete({ id: user.id, role: user.role }, id)
 
         revalidatePath('/dashboard/requirements')
         revalidatePath('/dashboard')
         return { success: true, message: 'Requirement deleted' }
     } catch (error) {
         console.error('Error deleting requirement:', error)
-        return { success: false, error: 'Failed to delete requirement' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to delete requirement') }
     }
 }
 
@@ -224,35 +392,14 @@ export async function freezeRequirement(id: string, comment?: string) {
     try {
         const user = await getCurrentUser()
         if (!user) throw new Error('Unauthorized')
-        if (!['SUPER_ADMIN', 'ADMIN', 'COORDINATOR'].includes(user.role)) throw new Error('Permission denied')
-
-        await connectDB()
-
-        const requirement = await Requirement.findOne({ _id: id, deletedAt: null })
-        if (!requirement) throw new Error('Requirement not found')
-
-        if (['CLOSED_HIRED', 'CLOSED_NOT_HIRED', 'FILLED', 'CANCELLED'].includes(requirement.status)) {
-            throw new Error('Cannot freeze a closed requirement')
-        }
-
-        requirement.status = 'ON_HOLD'
-        await requirement.save()
-
-        await Activity.create({
-            requirementId: requirement._id!,
-            userId: user.id as any,
-            type: 'STATUS_CHANGE',
-            summary: `Requirement frozen${comment ? `: ${comment}` : ''}`,
-            outcome: 'PENDING',
-            nextFollowUpDate: null,
-        })
+        const requirement = await RequirementService.freeze({ id: user.id, role: user.role }, id, comment)
 
         revalidatePath('/dashboard/requirements')
         revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(requirement)) }
     } catch (error) {
         console.error('Error freezing requirement:', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to freeze requirement' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to freeze requirement') }
     }
 }
 
@@ -260,32 +407,13 @@ export async function reassignRequirement(id: string, newOwnerId: string, commen
     try {
         const user = await getCurrentUser()
         if (!user) throw new Error('Unauthorized')
-        if (!['SUPER_ADMIN', 'ADMIN', 'COORDINATOR'].includes(user.role)) throw new Error('Permission denied')
-
-        await connectDB()
-
-        const requirement = await Requirement.findOne({ _id: id, deletedAt: null })
-        if (!requirement) throw new Error('Requirement not found')
-
-        const oldOwner = requirement.accountOwnerId?.toString()
-        requirement.accountOwnerId = newOwnerId as any
-        await requirement.save()
-
-        await Activity.create({
-            requirementId: requirement._id!,
-            userId: user.id as any,
-            type: 'STATUS_CHANGE',
-            summary: `Requirement reassigned to ${newOwnerId}${comment ? `: ${comment}` : ''}`,
-            outcome: 'PENDING',
-            nextFollowUpDate: null,
-            metadata: { fromOwner: oldOwner, toOwner: newOwnerId },
-        })
+        const requirement = await RequirementService.reassign({ id: user.id, role: user.role }, id, newOwnerId, comment)
 
         revalidatePath('/dashboard/requirements')
         revalidatePath('/dashboard')
         return { success: true, data: JSON.parse(JSON.stringify(requirement)) }
     } catch (error) {
         console.error('Error reassigning requirement:', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to reassign requirement' }
+            return { success: false, error: getActionErrorMessage(error, 'Failed to reassign requirement') }
     }
 }

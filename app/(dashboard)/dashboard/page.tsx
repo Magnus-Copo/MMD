@@ -1,17 +1,20 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { Types } from "mongoose"
-import {
-  AdminDashboard,
-  CoordinatorDashboard,
-  RecruiterDashboard,
-  ScraperDashboard
-} from "./_components"
-// ... imports
 import { getDashboardMetrics, getRecruiterDashboard } from "@/lib/actions/dashboard"
 import { getEnhancedLeadMetrics } from "@/lib/actions/module9-leads"
 import { AlertCircle } from "lucide-react"
 import { PageTransition } from "@/components/layout/PageTransition"
+
+type DashboardRole = 'SUPER_ADMIN' | 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER'
+
+function normalizeDashboardRole(role?: string): DashboardRole {
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'COORDINATOR' || role === 'RECRUITER' || role === 'SCRAPER') {
+    return role
+  }
+
+  return 'RECRUITER'
+}
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -20,37 +23,16 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
-  const role = session.user.role || 'RECRUITER'
+  const role = normalizeDashboardRole(session.user.role)
   const userId = session.user.id
 
   try {
-    // Get dashboard data based on role
-    const user = {
-      _id: new Types.ObjectId(userId),
-      role: role as 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER',
-      assignedGroup: null,
-    }
-
-    const metrics = await getDashboardMetrics(user)
-
-    if ((['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any))) {
-      return (
-        <PageTransition>
-          <AdminDashboard metrics={metrics} userName={session.user.name || 'Admin'} />
-        </PageTransition>
-      )
-    }
-
-    if (role === 'COORDINATOR') {
-      return (
-        <PageTransition>
-          <CoordinatorDashboard metrics={metrics} userName={session.user.name || 'Coordinator'} />
-        </PageTransition>
-      )
-    }
-
     if (role === 'SCRAPER') {
-      const enhancedMetricsRes = await getEnhancedLeadMetrics({})
+      const [{ ScraperDashboard }, enhancedMetricsRes] = await Promise.all([
+        import('./_components/ScraperDashboard'),
+        getEnhancedLeadMetrics({}),
+      ])
+
       const enhancedMetrics = enhancedMetricsRes?.data || undefined
 
       return (
@@ -60,14 +42,54 @@ export default async function DashboardPage() {
       )
     }
 
-    // Recruiter dashboard
-    const recruiterData = await getRecruiterDashboard(userId)
+    // Get dashboard data based on role
+    const user = {
+      _id: new Types.ObjectId(userId),
+      role,
+      assignedGroup: null,
+    }
+
+    if (role === 'RECRUITER') {
+      const [{ RecruiterDashboard }, metrics, recruiterData] = await Promise.all([
+        import('./_components/RecruiterDashboard'),
+        getDashboardMetrics(user),
+        getRecruiterDashboard(userId),
+      ])
+
+      return (
+        <PageTransition>
+          <RecruiterDashboard
+            metrics={metrics}
+            recruiterData={recruiterData}
+            userName={session.user.name || 'Recruiter'}
+          />
+        </PageTransition>
+      )
+    }
+
+    if (role === 'COORDINATOR') {
+      const [{ CoordinatorDashboard }, metrics] = await Promise.all([
+        import('./_components/CoordinatorDashboard'),
+        getDashboardMetrics(user),
+      ])
+
+      return (
+        <PageTransition>
+          <CoordinatorDashboard metrics={metrics} userName={session.user.name || 'Coordinator'} />
+        </PageTransition>
+      )
+    }
+
+    const [{ AdminDashboard }, metrics] = await Promise.all([
+      import('./_components/AdminPanel'),
+      getDashboardMetrics(user),
+    ])
+
     return (
       <PageTransition>
-        <RecruiterDashboard
+        <AdminDashboard
           metrics={metrics}
-          recruiterData={recruiterData}
-          userName={session.user.name || 'Recruiter'}
+          userName={session.user.name || 'Admin'}
         />
       </PageTransition>
     )

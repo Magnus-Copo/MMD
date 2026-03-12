@@ -2,6 +2,7 @@ import mongoose, { Schema, Model } from 'mongoose'
 
 export type Group = 'RASHMI' | 'MANJUNATH' | 'SCRAPING' | 'LEADS'
 export type WorkMode = 'REMOTE' | 'HYBRID' | 'ONSITE'
+export type RequirementPriority = 'High' | 'Medium' | 'Low'
 export type RequirementStatus =
   | 'PENDING_INTAKE'
   | 'AWAITING_JD'
@@ -28,6 +29,7 @@ export interface IRequirement {
   workMode: WorkMode
   location: string
   interviewClosingDate?: Date
+  priority: RequirementPriority
   group: Group
   accountOwnerId: mongoose.Types.ObjectId
   status: RequirementStatus
@@ -56,6 +58,7 @@ const RequirementSchema = new Schema<IRequirement>(
     workMode: { type: String, required: true, enum: ['REMOTE', 'HYBRID', 'ONSITE'] },
     location: { type: String, required: true },
     interviewClosingDate: { type: Date },
+    priority: { type: String, required: true, enum: ['High', 'Medium', 'Low'], default: 'Medium' },
     group: { type: String, required: true, enum: ['RASHMI', 'MANJUNATH', 'SCRAPING', 'LEADS'] },
     accountOwnerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     status: {
@@ -77,6 +80,7 @@ const RequirementSchema = new Schema<IRequirement>(
 RequirementSchema.index({ companyId: 1 })
 RequirementSchema.index({ accountOwnerId: 1 })
 RequirementSchema.index({ status: 1 })
+RequirementSchema.index({ priority: 1 })
 RequirementSchema.index({ group: 1 })
 // mmdId index is already created via unique: true in schema
 RequirementSchema.index({ deletedAt: 1 })

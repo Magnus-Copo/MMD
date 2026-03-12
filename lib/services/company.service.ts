@@ -12,6 +12,17 @@ export type CompanyInput = z.infer<typeof CompanySchema>
 export type CompanyUpdateInput = z.infer<typeof CompanyUpdateWithIdSchema>
 export type HRContactInput = z.infer<typeof HRContactSchema>
 
+const CompanyHRContactCreateSchema = HRContactSchema.extend({
+    companyId: z.string().min(1),
+})
+
+const CompanyHRContactUpdateSchema = CompanyHRContactCreateSchema.partial().extend({
+    id: z.string().min(1),
+})
+
+export type CompanyHRContactCreateInput = z.infer<typeof CompanyHRContactCreateSchema>
+export type CompanyHRContactUpdateInput = z.infer<typeof CompanyHRContactUpdateSchema>
+
 // Constants
 const ALLOWED_CREATORS = ["SUPER_ADMIN", "ADMIN", "COORDINATOR", "RECRUITER"] as const
 const ACTIVE_REQ_STATUSES = ['PENDING_INTAKE', 'AWAITING_JD', 'ACTIVE', 'SOURCING', 'INTERVIEWING', 'OFFER']
@@ -261,6 +272,212 @@ export class CompanyService {
             _id: company._id.toString(),
             contacts: contacts.map(c => ({ ...c, _id: c._id.toString(), companyId: c.companyId.toString() })),
             requirements: requirements.map(r => ({ ...r, _id: r._id.toString(), companyId: r.companyId.toString() })),
+        }
+    }
+
+    /**
+     * Canonical HR Contact getter by company.
+     */
+    static async getHRContacts(user: { id: string, role: string }, companyId: string) {
+        if (!ALLOWED_CREATORS.includes(user.role as any)) {
+            throw new ForbiddenError("permission denied")
+        }
+
+        await connectDB()
+
+        const company = await Company.findOne({ _id: companyId, deletedAt: null }).select('_id').lean()
+        if (!company) throw new NotFoundError("Company not found")
+
+        const contacts = await HRContact.find({ companyId, deletedAt: null })
+            .sort({ isPrimary: -1, name: 1 })
+            .lean()
+
+        return contacts.map((contact) => ({
+            ...contact,
+            _id: contact._id.toString(),
+            companyId: contact.companyId.toString(),
+        }))
+    }
+
+    /**
+     * Canonical HR Contact create.
+     */
+    static async createHRContact(user: { id: string, role: string }, data: CompanyHRContactCreateInput) {
+        if (!ALLOWED_CREATORS.includes(user.role as any)) {
+            throw new ForbiddenError("permission denied")
+        }
+
+        await connectDB()
+
+        const company = await Company.findOne({ _id: data.companyId, deletedAt: null }).select('_id name')
+        if (!company) throw new NotFoundError("Company not found")
+
+        if (data.isPrimary) {
+            await HRContact.updateMany(
+                { companyId: data.companyId, isPrimary: true, deletedAt: null },
+                { $set: { isPrimary: false } }
+            )
+        }
+
+        const contact = await HRContact.create({
+            companyId: data.companyId,
+            name: data.name,
+            phone: data.phone,
+            email: data.email,
+            linkedIn: data.linkedIn,
+            designation: data.designation,
+            isPrimary: data.isPrimary ?? false,
+        })
+
+        await AuditLog.create({
+            userId: user.id,
+            action: "HR_CONTACT_CREATED",
+            entity: "Company",
+            entityId: company._id.toString(),
+            newValue: {
+                contactId: contact._id.toString(),
+                name: contact.name,
+                companyId: data.companyId,
+            },
+        })
+
+        return {
+            ...contact.toObject(),
+            _id: contact._id.toString(),
+            companyId: String(contact.companyId),
+        }
+    }
+
+    /**
+     * Canonical HR Contact update.
+     */
+    static async updateHRContact(user: { id: string, role: string }, data: CompanyHRContactUpdateInput) {
+        if (!ALLOWED_CREATORS.includes(user.role as any)) {
+            throw new ForbiddenError("permission denied")
+        }
+
+        await connectDB()
+
+        const contact = await HRContact.findOne({ _id: data.id, deletedAt: null })
+        if (!contact) throw new NotFoundError("Contact not found")
+
+        const oldValue = contact.toObject()
+
+        if (data.isPrimary && !contact.isPrimary) {
+            await HRContact.updateMany(
+                { companyId: contact.companyId, isPrimary: true, _id: { $ne: contact._id }, deletedAt: null },
+                { $set: { isPrimary: false } }
+            )
+        }
+
+        if (data.name !== undefined) contact.name = data.name
+        if (data.phone !== undefined) contact.phone = data.phone
+        if (data.email !== undefined) contact.email = data.email
+        if (data.linkedIn !== undefined) contact.linkedIn = data.linkedIn
+        if (data.designation !== undefined) contact.designation = data.designation
+        if (data.isPrimary !== undefined) contact.isPrimary = data.isPrimary
+
+        await contact.save()
+
+        await AuditLog.create({
+            userId: user.id,
+            action: "HR_CONTACT_UPDATED",
+            entity: "Company",
+            entityId: String(contact.companyId),
+            oldValue,
+            newValue: contact.toObject(),
+        })
+
+        return {
+            ...contact.toObject(),
+            _id: contact._id.toString(),
+            companyId: String(contact.companyId),
+        }
+    }
+
+    /**
+     * Canonical HR Contact delete (soft delete).
+     */
+    static async deleteHRContact(user: { id: string, role: string }, contactId: string) {
+        if (!ALLOWED_CREATORS.includes(user.role as any)) {
+            throw new ForbiddenError("permission denied")
+        }
+
+        await connectDB()
+
+        const contact = await HRContact.findOne({ _id: contactId, deletedAt: null })
+        if (!contact) throw new NotFoundError("Contact not found")
+
+        const contactCount = await HRContact.countDocuments({
+            companyId: contact.companyId,
+            deletedAt: null,
+        })
+
+        if (contactCount <= 1) {
+            throw new AppError("Cannot delete the only HR contact for this company")
+        }
+
+        if (contact.isPrimary) {
+            const nextPrimary = await HRContact.findOne({
+                companyId: contact.companyId,
+                _id: { $ne: contact._id },
+                deletedAt: null,
+            }).sort({ createdAt: 1 })
+
+            if (nextPrimary) {
+                nextPrimary.isPrimary = true
+                await nextPrimary.save()
+            }
+        }
+
+        contact.deletedAt = new Date()
+        await contact.save()
+
+        await AuditLog.create({
+            userId: user.id,
+            action: "HR_CONTACT_DELETED",
+            entity: "Company",
+            entityId: String(contact.companyId),
+            oldValue: { contactId: contactId, deletedAt: null },
+            newValue: { deletedAt: contact.deletedAt },
+        })
+
+        return { success: true }
+    }
+
+    /**
+     * Canonical HR Contact set primary.
+     */
+    static async setHRContactPrimary(user: { id: string, role: string }, contactId: string) {
+        if (!ALLOWED_CREATORS.includes(user.role as any)) {
+            throw new ForbiddenError("permission denied")
+        }
+
+        await connectDB()
+
+        const contact = await HRContact.findOne({ _id: contactId, deletedAt: null })
+        if (!contact) throw new NotFoundError("Contact not found")
+
+        await HRContact.updateMany(
+            { companyId: contact.companyId, isPrimary: true, deletedAt: null },
+            { $set: { isPrimary: false } }
+        )
+
+        contact.isPrimary = true
+        await contact.save()
+
+        await AuditLog.create({
+            userId: user.id,
+            action: "HR_CONTACT_SET_PRIMARY",
+            entity: "Company",
+            entityId: String(contact.companyId),
+            newValue: { contactId: contactId, isPrimary: true },
+        })
+
+        return {
+            ...contact.toObject(),
+            _id: contact._id.toString(),
+            companyId: String(contact.companyId),
         }
     }
 

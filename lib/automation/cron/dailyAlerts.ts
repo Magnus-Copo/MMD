@@ -12,6 +12,10 @@ async function notify(userIds: string[], type: 'STALLED_REQ' | 'MISSING_JD' | 'F
   await Notification.insertMany(docs)
 }
 
+function getRequirementViewHref(requirementId: string): string {
+  return `/dashboard/requirements?view=${encodeURIComponent(requirementId)}`
+}
+
 export async function runDailyAlerts() {
   await connectDB()
   const admins = await User.find({ role: 'ADMIN', deletedAt: null }).select('_id').lean()
@@ -22,7 +26,7 @@ export async function runDailyAlerts() {
   for (const req of awaiting) {
     const company = await Company.findById(req.companyId)
     const targets = [req.accountOwnerId?.toString(), company?.assignedCoordinatorId?.toString(), ...adminIds].filter(Boolean) as string[]
-    await notify(targets, 'MISSING_JD', `JD missing for ${req.mmdId} (${company?.name ?? 'Company'})`, `/dashboard/requirements/${req._id}`)
+    await notify(targets, 'MISSING_JD', `JD missing for ${req.mmdId} (${company?.name ?? 'Company'})`, getRequirementViewHref(req._id.toString()))
   }
 
   const threeDaysAgo = subDays(new Date(), 3)
@@ -47,11 +51,11 @@ export async function runDailyAlerts() {
     const ownerId = req.accountOwnerId?.toString()
     const coordId = company?.assignedCoordinatorId?.toString()
     if (daysSince >= 7) {
-      await notify([ownerId, coordId, ...adminIds].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} stalled for ${daysSince.toFixed(0)} days`, `/dashboard/requirements/${req._id}`)
+      await notify([ownerId, coordId, ...adminIds].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} stalled for ${daysSince.toFixed(0)} days`, getRequirementViewHref(req._id.toString()))
     } else if (daysSince >= 5) {
-      await notify([coordId, ownerId].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} stalled for ${daysSince.toFixed(0)} days`, `/dashboard/requirements/${req._id}`)
+      await notify([coordId, ownerId].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} stalled for ${daysSince.toFixed(0)} days`, getRequirementViewHref(req._id.toString()))
     } else if (daysSince >= 3) {
-      await notify([ownerId].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} needs attention (inactive ${daysSince.toFixed(0)} days)`, `/dashboard/requirements/${req._id}`)
+      await notify([ownerId].filter(Boolean) as string[], 'STALLED_REQ', `Requirement ${req.mmdId} needs attention (inactive ${daysSince.toFixed(0)} days)`, getRequirementViewHref(req._id.toString()))
     }
   }
 

@@ -7,8 +7,39 @@ import { useToast } from '@/components/ui/Toast'
 import { createLead, bulkCreateLeads } from '@/lib/actions/module9-leads'
 import { SECTORS, SOURCE_PLATFORMS } from '@/types/leads'
 import type { LeadSector, LeadStatus, LeadActivity } from '@/types/leads'
-import * as XLSX from 'xlsx'
 import { UploadCloud, File, AlertCircle } from 'lucide-react'
+
+type ExcelJsModule = typeof import('exceljs')
+type PapaParseModule = typeof import('papaparse')
+
+let excelJsModulePromise: Promise<ExcelJsModule> | null = null
+let papaParseModulePromise: Promise<PapaParseModule> | null = null
+
+const loadExcelJs = async (): Promise<ExcelJsModule> => {
+    if (!excelJsModulePromise) {
+        excelJsModulePromise = import('exceljs/dist/exceljs.min.js')
+            .then(module => module.default as ExcelJsModule)
+            .catch((error) => {
+                excelJsModulePromise = null
+                throw error
+            })
+    }
+
+    return excelJsModulePromise
+}
+
+const loadPapaParse = async (): Promise<PapaParseModule> => {
+    if (!papaParseModulePromise) {
+        papaParseModulePromise = import('papaparse')
+            .then(module => module.default as PapaParseModule)
+            .catch((error) => {
+                papaParseModulePromise = null
+                throw error
+            })
+    }
+
+    return papaParseModulePromise
+}
 
 const emptyForm = {
     _id: '',
@@ -91,14 +122,45 @@ export function CreateLeadModal({ isOpen, onClose, onSuccess }: Readonly<CreateL
         if (!file) return
 
         setFileName(file.name)
-        
+        const ext = file.name.split('.').pop()?.toLowerCase()
+
         try {
-            const arrayBuffer = await file.arrayBuffer()
-            const wb = XLSX.read(arrayBuffer, { type: 'array' })
-            const wsname = wb.SheetNames[0]
-            const ws = wb.Sheets[wsname]
-            const data = XLSX.utils.sheet_to_json(ws)
-            setParsedData(data)
+            if (ext === 'csv') {
+                const Papa = await loadPapaParse()
+                const text = await file.text()
+                const result = Papa.parse<Record<string, unknown>>(text, {
+                    header: true,
+                    skipEmptyLines: true,
+                })
+                setParsedData(result.data)
+            } else if (ext === 'xlsx') {
+                const ExcelJS = await loadExcelJs()
+                const arrayBuffer = await file.arrayBuffer()
+                const workbook = new ExcelJS.Workbook()
+                await workbook.xlsx.load(arrayBuffer)
+                const worksheet = workbook.worksheets[0]
+
+                const headers: string[] = []
+                worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell) => {
+                    headers.push(String(cell.value ?? ''))
+                })
+
+                const data: Record<string, unknown>[] = []
+                worksheet.eachRow((row, rowIndex) => {
+                    if (rowIndex === 1) return
+                    const rowData: Record<string, unknown> = {}
+                    row.eachCell((cell, colIndex) => {
+                        if (headers[colIndex - 1]) {
+                            rowData[headers[colIndex - 1]] = cell.value
+                        }
+                    })
+                    data.push(rowData)
+                })
+                setParsedData(data)
+            } else {
+                toast.error('Unsupported Format', 'Please upload a .xlsx or .csv file')
+                setFileName(null)
+            }
         } catch (err) {
             console.error('File parsing error:', err)
             toast.error('File Error', 'Could not parse the selected file')
@@ -348,7 +410,7 @@ export function CreateLeadModal({ isOpen, onClose, onSuccess }: Readonly<CreateL
                     >
                         <input
                             type="file"
-                            accept=".xlsx, .xls, .csv"
+                            accept=".xlsx,.csv"
                             className="hidden"
                             ref={fileInputRef}
                             onChange={handleFileUpload}
@@ -356,8 +418,8 @@ export function CreateLeadModal({ isOpen, onClose, onSuccess }: Readonly<CreateL
                         <div className="mx-auto w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
                             <UploadCloud className="w-8 h-8 text-indigo-500" />
                         </div>
-                        <h3 className="text-lg font-semibold text-slate-800 mb-1">Click to Upload Excel</h3>
-                        <p className="text-slate-500 text-sm">Supports .xlsx, .xls, and .csv files</p>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-1">Click to Upload File</h3>
+                        <p className="text-slate-500 text-sm">Supports .xlsx and .csv files</p>
                     </button>
 
                     {fileName && (

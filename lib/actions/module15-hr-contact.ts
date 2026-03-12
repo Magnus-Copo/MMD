@@ -8,6 +8,8 @@ import {
 } from "@/lib/services/hr-contact.service"
 import { z } from "zod"
 
+// Compatibility action surface: CompanyService is the canonical HR contact owner.
+// Keep these actions as adapters while callers migrate fully to module3-company.
 
 export const createHRContact = createProtectedAction(
     HRContactSchema,

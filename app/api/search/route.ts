@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       type: 'requirement',
       title: `${r.mmdId} - ${r.jobTitle}`,
       subtitle: company?.name || 'Unknown Company',
-      href: `/dashboard/requirements/${r._id}`,
+      href: `/dashboard/requirements?view=${encodeURIComponent(r._id.toString())}`,
     })
   }
 

@@ -36,9 +36,8 @@ interface Invoice {
     } | null
     placement: {
         candidate: {
-            firstName: string
-            lastName: string
-        }
+            name: string
+        } | null
     } | null
     amount: number
     currency: string
@@ -90,7 +89,7 @@ export default function InvoicesPage() {
     const role = session?.user?.role || 'RECRUITER'
     const canUpdateStatus = role === 'SUPER_ADMIN' || role === 'COORDINATOR'
     const canDelete = role === 'SUPER_ADMIN'
-    const canCreateInvoice = (!['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any))
+    const canCreateInvoice = role === 'SUPER_ADMIN' || role === 'COORDINATOR'
 
     useEffect(() => {
         fetchData()
@@ -195,7 +194,7 @@ export default function InvoicesPage() {
             const row = [
                 inv.invoiceNumber,
                 `"${inv.company?.name || ''}"`,
-                `"${inv.placement?.candidate?.firstName || ''} ${inv.placement?.candidate?.lastName || ''}"`,
+                `"${inv.placement?.candidate?.name || ''}"`,
                 inv.amount,
                 inv.currency,
                 inv.status,
@@ -287,7 +286,7 @@ export default function InvoicesPage() {
                             { label: 'Sent', value: 'SENT' },
                             { label: 'Paid', value: 'PAID' },
                             { label: 'Overdue', value: 'OVERDUE' },
-                            { label: 'Cancelled', value: 'CANCELLED' }
+                            { label: 'Voided', value: 'VOID' }
                         ]}
                     />
                 </div>
@@ -349,7 +348,7 @@ export default function InvoicesPage() {
                                             </div>
                                             {inv.placement && (
                                                 <div className="text-xs text-slate-500 ml-6">
-                                                    For: {inv.placement.candidate?.firstName} {inv.placement.candidate?.lastName}
+                                                    For: {inv.placement.candidate?.name || 'Unknown candidate'}
                                                 </div>
                                             )}
                                         </td>

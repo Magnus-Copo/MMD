@@ -13,7 +13,7 @@ export const logWork = createProtectedAction(
       { id: session.user.id, role: session.user.role },
       payload
     )
-    revalidatePath('/dashboard/timesheets')
+    revalidatePath('/dashboard/timesheet')
     return entry
   }
 )
@@ -60,7 +60,7 @@ export const updateTimesheet = createProtectedAction(
       { id: session.user.id, role: session.user.role },
       payload
     )
-    revalidatePath('/dashboard/timesheets')
+    revalidatePath('/dashboard/timesheet')
     return entry
   }
 )
@@ -74,7 +74,7 @@ export const deleteTimesheet = createProtectedAction(
       { id: session.user.id, role: session.user.role },
       payload.id
     )
-    revalidatePath('/dashboard/timesheets')
+    revalidatePath('/dashboard/timesheet')
     return { success: true }
   }
 )
@@ -88,7 +88,7 @@ export const approveTimesheet = createProtectedAction(
       { id: session.user.id, role: session.user.role },
       payload.id
     )
-    revalidatePath('/dashboard/timesheets')
+    revalidatePath('/dashboard/timesheet')
     return entry
   }
 )

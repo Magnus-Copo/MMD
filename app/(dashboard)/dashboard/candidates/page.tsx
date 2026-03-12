@@ -36,9 +36,10 @@ import {
   getCandidates,
   addCandidateAction,
   updateCandidate,
+  updateCandidateStatusAction,
   deleteCandidate,
 } from '@/lib/actions/module8-candidate'
-import { getRequirements } from '@/lib/actions/requirements'
+import { getRequirements } from '@/lib/actions/module4-requirement'
 
 
 interface Skill {
@@ -147,6 +148,70 @@ function transformCandidate(bc: BackendCandidate): Candidate {
     requirementTitle: bc.requirement?.jobTitle || bc.requirement?.title,
     companyName: bc.requirement?.company || bc.requirement?.companyDetails?.name,
   }
+}
+
+type StatusTransitionPayload = {
+  candidateId: string
+  status: BackendCandidate['status']
+  phoneLog?: string
+  interview?: { datetime: string; interviewerEmail: string }
+  rejectionReasonCode?: string
+  offeredCtc?: number
+}
+
+type StatusTransitionResult =
+  | { cancelled: true; message: string }
+  | { cancelled: false; payload: StatusTransitionPayload }
+
+function buildStatusTransitionPayload(candidateId: string, status: BackendCandidate['status']): StatusTransitionResult {
+  const payload: StatusTransitionPayload = {
+    candidateId,
+    status,
+  }
+
+  if (status === 'SHORTLISTED') {
+    const phoneLog = window.prompt('Add phone screening note to move candidate to Screening')
+    if (!phoneLog?.trim()) {
+      return { cancelled: true, message: 'Status update cancelled: phone screening note is required' }
+    }
+    payload.phoneLog = phoneLog.trim()
+  }
+
+  if (status === 'INTERVIEWED') {
+    const datetime = window.prompt('Enter interview datetime (ISO format)')
+    if (!datetime?.trim()) {
+      return { cancelled: true, message: 'Status update cancelled: interview datetime is required' }
+    }
+
+    const interviewerEmail = window.prompt('Enter interviewer email')
+    if (!interviewerEmail?.trim()) {
+      return { cancelled: true, message: 'Status update cancelled: interviewer email is required' }
+    }
+
+    payload.interview = {
+      datetime: datetime.trim(),
+      interviewerEmail: interviewerEmail.trim(),
+    }
+  }
+
+  if (status === 'OFFERED') {
+    const offeredCtcRaw = window.prompt('Enter offered CTC (numeric value)')
+    const offeredCtc = Number.parseFloat(offeredCtcRaw || '')
+    if (!Number.isFinite(offeredCtc) || offeredCtc < 0) {
+      return { cancelled: true, message: 'Status update cancelled: valid offered CTC is required' }
+    }
+    payload.offeredCtc = offeredCtc
+  }
+
+  if (status === 'REJECTED') {
+    const rejectionReasonCode = window.prompt('Enter rejection reason code')
+    if (!rejectionReasonCode?.trim()) {
+      return { cancelled: true, message: 'Status update cancelled: rejection reason code is required' }
+    }
+    payload.rejectionReasonCode = rejectionReasonCode.trim()
+  }
+
+  return { cancelled: false, payload }
 }
 
 
@@ -432,7 +497,7 @@ export default function CandidatesPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [availableRequirements, setAvailableRequirements] = useState<Array<{ id: string; title: string; company: string }>>([])
+  const [availableRequirements, setAvailableRequirements] = useState<Array<{ id: string; title: string; company: string; mmdId?: string }>>([])
   const [formData, setFormData] = useState<Candidate>(emptyForm)
   const [skillsInput, setSkillsInput] = useState('')
   const [selectedRequirementId, setSelectedRequirementId] = useState('')
@@ -477,10 +542,11 @@ export default function CandidatesPage() {
       const result = await getRequirements({})
       if (result.success && result.data) {
         setAvailableRequirements(
-          result.data.map((r: { _id?: string; id?: string; title?: string; jobTitle?: string; company?: string }) => ({
+          result.data.map((r: { _id?: string; id?: string; title?: string; jobTitle?: string; company?: string; mmdId?: string }) => ({
             id: r.id || r._id || '',
             title: r.jobTitle || r.title || 'Unknown Role',
             company: r.company || '',
+            mmdId: r.mmdId,
           }))
         )
       }
@@ -661,8 +727,9 @@ export default function CandidatesPage() {
       return
     }
 
+    const statusChanged = isEditing && selectedCandidate ? formData.status !== selectedCandidate.status : false
+
     if (!isPrivileged) {
-      const statusChanged = isEditing && selectedCandidate ? formData.status !== selectedCandidate.status : false
       if (statusChanged && !recruiterStatusOptions.includes(formData.status)) {
         toast.error('Restricted Status', 'Recruiters can only set status to Applied, Screening, or Interview')
         return
@@ -706,9 +773,35 @@ export default function CandidatesPage() {
         })
 
         if (result.success && result.data) {
-          const updatedCandidate = transformCandidate(result.data as unknown as BackendCandidate)
+          let updatedCandidate = transformCandidate(result.data as unknown as BackendCandidate)
+          let partialUpdateMessage: string | null = null
+
+          if (statusChanged) {
+            const backendStatus = reverseStatusMap[formData.status]
+            const transition = buildStatusTransitionPayload(formData.id, backendStatus)
+
+            if (transition.cancelled) {
+              partialUpdateMessage = transition.message
+            } else {
+              const statusResult = await updateCandidateStatusAction(transition.payload)
+              if (statusResult.success && statusResult.data) {
+                updatedCandidate = transformCandidate(statusResult.data as unknown as BackendCandidate)
+                const transitionWarning = (statusResult.data as { warning?: string } | undefined)?.warning
+                if (transitionWarning) {
+                  toast.error('Transition Warning', transitionWarning)
+                }
+              } else {
+                partialUpdateMessage = statusResult.error || 'Candidate details saved but status update failed'
+              }
+            }
+          }
+
           setCandidates((prev) => prev.map((c) => (c.id === formData.id ? updatedCandidate : c)))
-          toast.success('Candidate Updated', `${formData.name} has been updated`)
+          if (partialUpdateMessage) {
+            toast.error('Partial Update', partialUpdateMessage)
+          } else {
+            toast.success('Candidate Updated', `${formData.name} has been updated`)
+          }
           fetchCandidates()
           closeModal()
         } else {
@@ -1064,7 +1157,7 @@ export default function CandidatesPage() {
                     onChange={(e) => setSelectedRequirementId(e.target.value)}
                     options={[
                       { label: 'Select Requirement', value: '' },
-                      ...availableRequirements.map(r => ({ label: `${r.title} (${r.company})`, value: r.id }))
+                      ...availableRequirements.map(r => ({ label: `${r.mmdId ? `${r.mmdId} • ` : ''}${r.title} (${r.company})`, value: r.id }))
                     ]}
                     className="w-full"
                   />

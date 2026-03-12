@@ -39,8 +39,8 @@ export const LoginSchema = z.object({
 // ============================================
 
 export const MmdIdSchema = z.string().regex(
-  /^MMD-[A-Z]+-\d{8}-\d{3}$/,
-  'Invalid MMD-ID format. Expected: MMD-{GROUP}-{YYYYMMDD}-{SEQUENCE}'
+  /^REQ-\d{2}-[A-Z]{2,3}-\d{3}$/,
+  'Invalid requirement ID format. Expected: REQ-{YY}-{SECTOR}-{SEQUENCE}'
 )
 
 // ============================================
@@ -73,6 +73,7 @@ export const HRContactSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email('Invalid email address').or(z.literal('')).optional(),
   linkedIn: z.string().url().optional(),
+  designation: z.string().optional(),
   isPrimary: z.boolean().default(false),
 })
 
@@ -158,6 +159,8 @@ export const RequirementStatusSchema = z.enum([
   'ON_HOLD',
 ])
 
+export const RequirementPrioritySchema = z.enum(['High', 'Medium', 'Low'])
+
 export const RequirementSchema = z
   .object({
     companyId: z.string().min(1, 'Company is required'),
@@ -172,6 +175,7 @@ export const RequirementSchema = z
     workMode: WorkModeSchema,
     location: z.string().min(2, 'Location is required'),
     interviewClosingDate: z.date().optional(),
+    priority: RequirementPrioritySchema.default('Medium'),
     group: GroupSchema,
     accountOwnerId: z.string().min(1, 'Account owner is required'),
     status: RequirementStatusSchema.default('PENDING_INTAKE'),

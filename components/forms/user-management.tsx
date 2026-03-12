@@ -1,18 +1,28 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { createUserAction, updateUserRoleAction } from "@/lib/actions/module1-auth"
 import { UserRole } from "@/lib/db/models/User"
 
 interface UserFormProps {
   onCreated?: () => void
+  triggerLabel?: string
+  triggerClassName?: string
+  triggerIcon?: ReactNode
 }
 
 const roles: UserRole[] = ["SUPER_ADMIN", "ADMIN", "COORDINATOR", "RECRUITER", "SCRAPER"]
 
-export function UserManagementModal({ onCreated }: Readonly<UserFormProps>) {
+export function UserManagementModal({
+  onCreated,
+  triggerLabel = 'Create User',
+  triggerClassName,
+  triggerIcon,
+}: Readonly<UserFormProps>) {
   const { data: session } = useSession()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
@@ -37,8 +47,11 @@ export function UserManagementModal({ onCreated }: Readonly<UserFormProps>) {
     setName("")
     setPassword("")
     setRole("RECRUITER")
+    router.refresh()
     onCreated?.()
   }
+
+  const defaultTriggerClassName = 'rounded-md bg-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed'
 
   return (
     <>
@@ -46,10 +59,13 @@ export function UserManagementModal({ onCreated }: Readonly<UserFormProps>) {
         type="button"
         onClick={() => setOpen(true)}
         disabled={!isAdmin}
-        className="rounded-md bg-primary px-4 py-2 text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        className={triggerClassName || defaultTriggerClassName}
         title={isAdmin ? "Create user" : "Admin only"}
       >
-        Create User
+        <span className="inline-flex items-center gap-2">
+          {triggerIcon}
+          {triggerLabel}
+        </span>
       </button>
 
       {open && (

@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/daily-alerts",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/export-jobs",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/report-schedules",
+      "schedule": "0 * * * *"
     }
   ]
 }

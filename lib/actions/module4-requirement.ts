@@ -31,6 +31,7 @@ const UpdateRequirementSchema = z.object({
   workMode: z.enum(['REMOTE', 'HYBRID', 'ONSITE']).optional(),
   location: z.string().min(2).optional(),
   interviewClosingDate: z.date().optional(),
+  priority: z.enum(['High', 'Medium', 'Low']).optional(),
   group: z.enum(['RASHMI', 'MANJUNATH', 'SCRAPING', 'LEADS']).optional(),
   accountOwnerId: z.string().optional(),
   applicationFormId: z.string().optional(),
@@ -48,6 +49,10 @@ const ReassignRequirementSchema = z.object({
   requirementId: z.string().min(1),
   newOwnerId: z.string().min(1),
   comment: z.string().optional(),
+})
+
+const DeleteRequirementSchema = z.object({
+  id: z.string().min(1),
 })
 
 const GetRequirementsFilterSchema = z.object({
@@ -165,6 +170,21 @@ export const reassignRequirementAction = createProtectedAction(
     )
     revalidatePath('/dashboard/requirements')
     return serializeDoc(requirement)
+  }
+)
+
+/**
+ * Delete Requirement Action
+ */
+export const deleteRequirementAction = createProtectedAction(
+  DeleteRequirementSchema,
+  async (payload, session) => {
+    await RequirementService.delete(
+      { id: session.user.id, role: session.user.role },
+      payload.id
+    )
+    revalidatePath('/dashboard/requirements')
+    return { success: true }
   }
 )
 

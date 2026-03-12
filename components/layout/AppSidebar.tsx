@@ -10,6 +10,8 @@ import {
   Users,
   Search,
   Clock,
+  Activity,
+  Mail,
   BarChart3,
 
   ChevronRight,
@@ -79,6 +81,18 @@ const navItems: NavItem[] = [
     href: '/dashboard/timesheet',
     icon: <Clock className="h-5 w-5" />,
     roles: ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR', 'RECRUITER', 'SCRAPER'],
+  },
+  {
+    label: 'Activities',
+    href: '/dashboard/activities',
+    icon: <Activity className="h-5 w-5" />,
+    roles: ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR', 'RECRUITER'],
+  },
+  {
+    label: 'Communications',
+    href: '/dashboard/communications',
+    icon: <Mail className="h-5 w-5" />,
+    roles: ['SUPER_ADMIN', 'ADMIN', 'COORDINATOR', 'RECRUITER'],
   },
   {
     label: 'Templates',

@@ -2,12 +2,13 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { getUsers } from "@/lib/actions/module1-auth"
 import UserList from "./_components/UserList"
+import { UserManagementModal } from "@/components/forms/user-management"
 import { Users, UserPlus } from "lucide-react"
 
 export default async function UsersPage() {
     const session = await auth()
 
-    if (!session?.user || (!['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(session.user.role))) {
+    if (!session?.user || !['SUPER_ADMIN', 'ADMIN'].includes(session.user.role)) {
         redirect("/dashboard")
     }
 
@@ -37,10 +38,11 @@ export default async function UsersPage() {
                         <p className="text-slate-500">Manage team access and roles</p>
                     </div>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
-                    <UserPlus className="h-4 w-4" />
-                    Invite User
-                </button>
+                <UserManagementModal
+                    triggerLabel="Invite User"
+                    triggerIcon={<UserPlus className="h-4 w-4" />}
+                    triggerClassName="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+                />
             </div>
 
             <UserList initialUsers={formattedUsers} />

@@ -17,103 +17,300 @@ const OFFER_STUCK_DAYS = Number(process.env.DASHBOARD_OFFER_STUCK_DAYS ?? 5)
 const MOU_EXPIRY_DAYS = Number(process.env.DASHBOARD_MOU_EXPIRY_DAYS ?? 5)
 const IDLE_ACTIVITY_HOURS = Number(process.env.DASHBOARD_IDLE_ACTIVITY_HOURS ?? 24)
 const STALLED_INACTIVITY_DAYS = Number(process.env.DASHBOARD_STALLED_DAYS ?? 15)
+const RED_ZONE_RECENCY_DAYS = Number(process.env.DASHBOARD_RED_ZONE_RECENCY_DAYS ?? 45)
+const RECENT_ACTIVITY_DAYS = Number(process.env.DASHBOARD_RECENT_ACTIVITY_DAYS ?? 30)
+const RECENT_ACTIVITY_FETCH_LIMIT = 50
+const RECENT_ACTIVITY_LIMIT = 10
+const URGENT_FOLLOW_UP_FETCH_LIMIT = 30
+const URGENT_FOLLOW_UP_LIMIT = 10
+const SYNTHETIC_ACTIVITY_REGEX = /^synthetic activity\s+\d+\s+for\s+/i
+const OPERATIONAL_REQUIREMENT_STATUSES = ['PENDING_INTAKE', 'AWAITING_JD', 'ACTIVE', 'SOURCING', 'INTERVIEWING', 'OFFER', 'ON_HOLD'] as const
+
+interface DashboardActivityRow {
+  _id: { toString(): string }
+  type: string
+  summary: string
+  outcome?: string
+  createdAt: Date | string
+  userName?: string
+  requirementMmdId?: string
+  requirementTitle?: string
+  requirementId?: { toString(): string }
+}
+
+interface DashboardFollowUpRow {
+  _id: { toString(): string }
+  summary: string
+  nextFollowUpDate: Date | string
+  requirementMmdId?: string
+  requirementTitle?: string
+  requirementId?: { toString(): string }
+  isOverdue?: boolean
+}
+
+function normalizeSummary(summary: string | undefined): string {
+  if (!summary) return ''
+  return summary.trim().replace(/\s+/g, ' ')
+}
+
+function isSyntheticActivity(summary: string): boolean {
+  return SYNTHETIC_ACTIVITY_REGEX.test(summary)
+}
+
+function sanitizeRecentActivities(items: DashboardActivityRow[]): DashboardActivityRow[] {
+  const seen = new Set<string>()
+  const cleaned: DashboardActivityRow[] = []
+
+  for (const item of items) {
+    const summary = normalizeSummary(item.summary)
+    const requirementId = item.requirementId?.toString()
+
+    if (!summary || !requirementId || isSyntheticActivity(summary)) continue
+
+    const dedupeKey = `${item.type}:${summary.toLowerCase()}:${requirementId}:${item.userName || ''}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
+    cleaned.push({ ...item, summary })
+    if (cleaned.length >= RECENT_ACTIVITY_LIMIT) break
+  }
+
+  return cleaned
+}
+
+function sanitizeUrgentFollowUps(items: DashboardFollowUpRow[]): DashboardFollowUpRow[] {
+  const seen = new Set<string>()
+  const cleaned: DashboardFollowUpRow[] = []
+
+  for (const item of items) {
+    const summary = normalizeSummary(item.summary)
+    const requirementId = item.requirementId?.toString()
+
+    if (!summary || !requirementId || isSyntheticActivity(summary)) continue
+
+    const followUpDateKey = item.nextFollowUpDate instanceof Date
+      ? item.nextFollowUpDate.toISOString()
+      : String(item.nextFollowUpDate || '')
+    const dedupeKey = `${summary.toLowerCase()}:${requirementId}:${followUpDateKey}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
+    cleaned.push({ ...item, summary })
+    if (cleaned.length >= URGENT_FOLLOW_UP_LIMIT) break
+  }
+
+  return cleaned
+}
 
 export async function getDashboardMetrics(user: RoleUser) {
+  const requestStartedAt = Date.now()
   await connectDB()
 
   const now = new Date()
   const monthStart = startOfMonth(now)
   const thirtyDaysAgo = subDays(now, 30)
-  const fiveDaysAgo = subDays(now, 5)
   const todayStart = startOfDay(now)
   const todayEnd = endOfDay(now)
   const offerStuckCutoff = subDays(now, OFFER_STUCK_DAYS || 5)
   const mouExpiryThreshold = new Date(now.getTime() + (MOU_EXPIRY_DAYS || 5) * 24 * 60 * 60 * 1000)
   const idleActivityCutoff = new Date(now.getTime() - (IDLE_ACTIVITY_HOURS || 24) * 60 * 60 * 1000)
   const stalledCutoff = subDays(now, STALLED_INACTIVITY_DAYS || 15)
+  const redZoneRecencyCutoff = subDays(now, RED_ZONE_RECENCY_DAYS || 45)
+  const recentActivityCutoff = subDays(now, RECENT_ACTIVITY_DAYS || 30)
+  const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN'
+  const needsActivityPanels = isAdmin || user.role === 'COORDINATOR'
+  const needsFunnel = isAdmin || user.role === 'COORDINATOR'
+  const needsTrend = isAdmin
 
   // Base filters with RBAC
   const reqFilter = applyRequirementRBAC(user, {})
-  // Note: candidateFilter removed - using global candidate counts for dashboard
 
-  // Total companies
-  const totalCompanies = await Company.countDocuments({ deletedAt: null })
+  // Prepare activity RBAC filter once to reuse in all activity queries.
+  let activityBaseFilter: Record<string, unknown> = {}
+  if (!isAdmin) {
+    const allowedReqIds = await Requirement.distinct('_id', reqFilter)
+    activityBaseFilter = allowedReqIds.length > 0
+      ? { $or: [{ requirementId: { $in: allowedReqIds } }, { userId: user._id }] }
+      : { userId: user._id }
+  }
 
-  // Active requirements
-  const activeRequirements = await Requirement.countDocuments({
+  const totalCompaniesPromise = Company.countDocuments({ deletedAt: null })
+  const activeRequirementsPromise = Requirement.countDocuments({
     ...reqFilter,
     status: { $in: ['PENDING_INTAKE', 'AWAITING_JD', 'ACTIVE', 'SOURCING', 'INTERVIEWING', 'OFFER'] },
   })
-
-  // Stalled requirements (> configured days no activity)
-  const activities = await Activity.aggregate([
-    { $match: { createdAt: { $gte: stalledCutoff } } },
-    { $group: { _id: '$requirementId', lastActivity: { $max: '$createdAt' } } },
-  ])
-  const activeReqIds = activities.map((a) => a._id)
-
-  const stalledCount = await Requirement.countDocuments({
-    ...reqFilter,
-    status: { $in: ['ACTIVE', 'SOURCING', 'INTERVIEWING'] },
-    _id: { $nin: activeReqIds },
-    createdAt: { $lt: stalledCutoff }, // Only count as stalled if they are older than the cutoff
+  const activeReqIdsPromise = Activity.distinct('requirementId', {
+    createdAt: { $gte: stalledCutoff },
+    requirementId: { $ne: null },
   })
-
-  // Prepare Activity RBAC Filter
-  let activityBaseFilter: any = {}
-  if ((!['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(user.role))) {
-    const allowedRequirements = await Requirement.find(reqFilter).select('_id')
-    const allowedReqIds = allowedRequirements.map((r) => r._id)
-    activityBaseFilter = {
-      $or: [{ requirementId: { $in: allowedReqIds } }, { userId: user._id }],
-    }
-  }
-
-  // Missing JDs
-  const missingJDCount = await Requirement.countDocuments({
+  const missingJDCountPromise = Requirement.countDocuments({
     ...reqFilter,
     status: 'AWAITING_JD',
   })
-
-  // Today's follow-ups (including overdue ones up to today)
-  const followUpsToday = await Activity.countDocuments({
+  const followUpsTodayPromise = Activity.countDocuments({
     ...activityBaseFilter,
     nextFollowUpDate: { $lte: todayEnd },
     isCompleted: false,
   })
-
-  // Pending actions total
-  const pendingActions = stalledCount + missingJDCount + followUpsToday
-
-  // Pipeline conversion (month-to-date)
-  let monthCandidates = []
-  try {
-    monthCandidates = await Candidate.aggregate([
+  const monthCandidatesPromise = Candidate.aggregate([
+    {
+      $match: {
+        deletedAt: null,
+        createdAt: { $gte: monthStart },
+      },
+    },
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 },
+      },
+    },
+  ]).catch((error) => {
+    console.error('Conversion aggregate error:', error)
+    return [] as Array<{ _id: string; count: number }>
+  })
+  const reqByStatusPromise = needsFunnel
+    ? Requirement.aggregate([{ $match: { ...reqFilter } }, { $group: { _id: '$status', count: { $sum: 1 } } }])
+    : Promise.resolve([] as Array<{ _id: string; count: number }>)
+  const reqTrendPromise = needsTrend
+    ? Requirement.aggregate([
       {
         $match: {
-          deletedAt: null,
+          ...reqFilter,
+          createdAt: { $gte: thirtyDaysAgo },
         },
       },
       {
         $group: {
-          _id: '$status',
-          count: { $sum: 1 },
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          created: { $sum: 1 },
+          closed: {
+            $sum: { $cond: [{ $in: ['$status', ['CLOSED_HIRED', 'CLOSED_NOT_HIRED']] }, 1, 0] },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ])
+    : Promise.resolve([] as Array<{ _id: string; created: number; closed: number }>)
+  const recentActivitiesPromise: Promise<DashboardActivityRow[]> = needsActivityPanels
+    ? Activity.aggregate([
+      {
+        $match: {
+          ...activityBaseFilter,
+          createdAt: { $gte: recentActivityCutoff },
+          requirementId: { $ne: null },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $limit: RECENT_ACTIVITY_FETCH_LIMIT },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'requirements',
+          localField: 'requirementId',
+          foreignField: '_id',
+          as: 'requirement',
+        },
+      },
+      { $unwind: { path: '$requirement', preserveNullAndEmptyArrays: false } },
+      {
+        $project: {
+          _id: 1,
+          type: 1,
+          summary: 1,
+          outcome: 1,
+          createdAt: 1,
+          userName: '$user.name',
+          requirementMmdId: '$requirement.mmdId',
+          requirementTitle: '$requirement.jobTitle',
+          requirementId: '$requirement._id',
         },
       },
     ])
-  } catch (e) {
-    console.error('Conversion aggregate error:', e)
-  }
+    : Promise.resolve([])
+  const urgentFollowUpsPromise: Promise<DashboardFollowUpRow[]> = needsActivityPanels
+    ? Activity.aggregate([
+      {
+        $match: {
+          ...activityBaseFilter,
+          requirementId: { $ne: null },
+          nextFollowUpDate: { $lte: todayEnd },
+          isCompleted: false,
+        },
+      },
+      { $sort: { nextFollowUpDate: 1 } },
+      { $limit: URGENT_FOLLOW_UP_FETCH_LIMIT },
+      {
+        $lookup: {
+          from: 'requirements',
+          localField: 'requirementId',
+          foreignField: '_id',
+          as: 'requirement',
+        },
+      },
+      { $unwind: { path: '$requirement', preserveNullAndEmptyArrays: false } },
+      {
+        $project: {
+          _id: 1,
+          summary: 1,
+          nextFollowUpDate: 1,
+          requirementMmdId: '$requirement.mmdId',
+          requirementTitle: '$requirement.jobTitle',
+          requirementId: '$requirement._id',
+          isOverdue: { $lt: ['$nextFollowUpDate', todayStart] },
+        },
+      },
+    ])
+    : Promise.resolve([])
 
-  const totalApplied = monthCandidates.reduce((acc, c) => acc + c.count, 0)
-  const joined = monthCandidates.find((c) => c._id === 'JOINED')?.count || 0
-  const conversionRate = totalApplied > 0 ? Math.round((joined / totalApplied) * 100) : 0
-
-  // Requirements by status for funnel
-  const reqByStatus = await Requirement.aggregate([
-    { $match: { ...reqFilter } },
-    { $group: { _id: '$status', count: { $sum: 1 } } },
+  const [
+    totalCompanies,
+    activeRequirements,
+    activeReqIds,
+    missingJDCount,
+    followUpsToday,
+    monthCandidates,
+    reqByStatus,
+    reqTrend,
+    recentActivities,
+    urgentFollowUps,
+  ] = await Promise.all([
+    totalCompaniesPromise,
+    activeRequirementsPromise,
+    activeReqIdsPromise,
+    missingJDCountPromise,
+    followUpsTodayPromise,
+    monthCandidatesPromise,
+    reqByStatusPromise,
+    reqTrendPromise,
+    recentActivitiesPromise,
+    urgentFollowUpsPromise,
   ])
+
+  const cleanedRecentActivities = sanitizeRecentActivities(recentActivities)
+  const cleanedUrgentFollowUps = sanitizeUrgentFollowUps(urgentFollowUps)
+
+  // Stalled requirements (> configured days no activity)
+  const stalledCount = await Requirement.countDocuments({
+    ...reqFilter,
+    status: { $in: ['ACTIVE', 'SOURCING', 'INTERVIEWING'] },
+    _id: { $nin: activeReqIds },
+    createdAt: { $lt: stalledCutoff },
+  })
+
+  const pendingActions = stalledCount + missingJDCount + followUpsToday
+
+  const totalApplied = monthCandidates.reduce((acc, entry) => acc + entry.count, 0)
+  const joined = monthCandidates.find((entry) => entry._id === 'JOINED')?.count || 0
+  const conversionRate = totalApplied > 0 ? Math.round((joined / totalApplied) * 100) : 0
 
   const funnelDefs = [
     { status: 'PENDING_INTAKE', label: 'Pending Intake', color: '#818CF8' },
@@ -134,208 +331,151 @@ export async function getDashboardMetrics(user: RoleUser) {
     color: item.color,
   }))
 
-  // Requirements created vs closed (last 30 days)
-  const reqTrend = await Requirement.aggregate([
-    {
-      $match: {
-        ...reqFilter,
-        createdAt: { $gte: thirtyDaysAgo },
-      },
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        created: { $sum: 1 },
-        closed: {
-          $sum: { $cond: [{ $in: ['$status', ['CLOSED_HIRED', 'CLOSED_NOT_HIRED']] }, 1, 0] },
-        },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ])
-
-  // Recent activities
-  const recentActivities = await Activity.aggregate([
-    { $match: activityBaseFilter },
-    { $sort: { createdAt: -1 } },
-    { $limit: 10 },
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'userId',
-        foreignField: '_id',
-        as: 'user',
-      },
-    },
-    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: 'requirements',
-        localField: 'requirementId',
-        foreignField: '_id',
-        as: 'requirement',
-      },
-    },
-    { $unwind: { path: '$requirement', preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 1,
-        type: 1,
-        summary: 1,
-        outcome: 1,
-        createdAt: 1,
-        userName: '$user.name',
-        requirementMmdId: '$requirement.mmdId',
-        requirementId: '$requirement._id',
-      },
-    },
-  ])
-
-  // Urgent follow-ups (today + overdue)
-  const urgentFollowUps = await Activity.aggregate([
-    {
-      $match: {
-        ...activityBaseFilter,
-        nextFollowUpDate: { $lte: todayEnd },
-        isCompleted: false,
-      },
-    },
-    { $sort: { nextFollowUpDate: 1 } },
-    { $limit: 10 },
-    {
-      $lookup: {
-        from: 'requirements',
-        localField: 'requirementId',
-        foreignField: '_id',
-        as: 'requirement',
-      },
-    },
-    { $unwind: { path: '$requirement', preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 1,
-        summary: 1,
-        nextFollowUpDate: 1,
-        requirementMmdId: '$requirement.mmdId',
-        requirementId: '$requirement._id',
-        isOverdue: { $lt: ['$nextFollowUpDate', todayStart] },
-      },
-    },
-  ])
-
   // Red Zone: high-signal exceptions for admins
   const redZone: Array<{ id: string; title: string; detail: string; href: string; severity: 'high' | 'medium' }> = []
 
-  // MOU pending or expiring soon
-  const pendingMous = await Company.find({ mouStatus: { $ne: 'SIGNED' }, deletedAt: null })
-    .select('name mouStatus')
-    .limit(5)
-    .lean()
+  if (isAdmin) {
+    const operationalRequirementFilter = {
+      deletedAt: null,
+      status: { $in: OPERATIONAL_REQUIREMENT_STATUSES },
+      updatedAt: { $gte: redZoneRecencyCutoff },
+    }
 
-  const expiringMous = await Company.find({
-    deletedAt: null,
-    mouStatus: 'SIGNED',
-    mouEndDate: { $ne: null, $lte: mouExpiryThreshold },
-  })
-    .select('name mouEndDate mouStatus')
-    .limit(5)
-    .lean()
+    const [operationalCompanyIds, operationalOwnerIds] = await Promise.all([
+      Requirement.distinct('companyId', operationalRequirementFilter),
+      Requirement.distinct('accountOwnerId', operationalRequirementFilter),
+    ])
 
-  pendingMous.forEach((company) => {
-    redZone.push({
-      id: `mou-${company._id?.toString()}`,
-      title: `MOU pending: ${company.name}`,
-      detail: company.mouStatus === 'IN_PROGRESS' ? 'Awaiting admin approval' : 'Awaiting upload',
-      href: '/dashboard/companies?mou=expiring',
-      severity: 'high',
+    const [pendingMous, expiringMous, stuckOffers, recruiters, todayActivityByUser] = await Promise.all([
+      operationalCompanyIds.length > 0
+        ? Company.find({
+          _id: { $in: operationalCompanyIds },
+          deletedAt: null,
+          mouStatus: { $in: ['NOT_STARTED', 'IN_PROGRESS'] },
+          updatedAt: { $gte: redZoneRecencyCutoff },
+        }).select('name mouStatus').sort({ updatedAt: -1 }).limit(5).lean()
+        : Promise.resolve([]),
+      operationalCompanyIds.length > 0
+        ? Company.find({
+          _id: { $in: operationalCompanyIds },
+          deletedAt: null,
+          mouStatus: 'SIGNED',
+          mouEndDate: { $gte: todayStart, $lte: mouExpiryThreshold },
+        }).select('name mouEndDate mouStatus').sort({ mouEndDate: 1 }).limit(5).lean()
+        : Promise.resolve([]),
+      Candidate.aggregate([
+        {
+          $match: {
+            status: 'OFFERED',
+            deletedAt: null,
+            offeredAt: { $lte: offerStuckCutoff, $gte: redZoneRecencyCutoff },
+          },
+        },
+        { $sort: { offeredAt: 1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: 'requirements',
+            localField: 'requirementId',
+            foreignField: '_id',
+            as: 'req',
+          },
+        },
+        { $unwind: { path: '$req', preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            offeredAt: 1,
+            requirementId: '$req._id',
+            mmdId: '$req.mmdId',
+          },
+        },
+      ]),
+      operationalOwnerIds.length > 0
+        ? User.find({
+          _id: { $in: operationalOwnerIds },
+          role: 'RECRUITER',
+          isActive: true,
+          deletedAt: null,
+        }).select('_id name email').limit(20).lean()
+        : Promise.resolve([]),
+      operationalOwnerIds.length > 0
+        ? Activity.aggregate([
+          {
+            $match: {
+              userId: { $in: operationalOwnerIds },
+              createdAt: { $gte: idleActivityCutoff, $lte: todayEnd },
+              summary: { $not: SYNTHETIC_ACTIVITY_REGEX },
+            },
+          },
+          { $group: { _id: '$userId', count: { $sum: 1 } } },
+        ])
+        : Promise.resolve([]),
+    ])
+
+    pendingMous.forEach((company) => {
+      redZone.push({
+        id: `mou-${company._id?.toString()}`,
+        title: `MOU pending: ${company.name}`,
+        detail: company.mouStatus === 'IN_PROGRESS' ? 'Awaiting admin approval' : 'Awaiting upload',
+        href: '/dashboard/companies?mou=expiring',
+        severity: 'high',
+      })
     })
-  })
 
-  expiringMous.forEach((company) => {
-    redZone.push({
-      id: `mou-expiring-${company._id?.toString()}`,
-      title: `MOU expiring: ${company.name}`,
-      detail: company.mouEndDate ? `Ends ${new Date(company.mouEndDate).toLocaleDateString()}` : 'Expiry near',
-      href: '/dashboard/companies?mou=expiring',
-      severity: 'high',
+    expiringMous.forEach((company) => {
+      redZone.push({
+        id: `mou-expiring-${company._id?.toString()}`,
+        title: `MOU expiring: ${company.name}`,
+        detail: company.mouEndDate ? `Ends ${new Date(company.mouEndDate).toLocaleDateString()}` : 'Expiry near',
+        href: '/dashboard/companies?mou=expiring',
+        severity: 'high',
+      })
     })
-  })
 
-  // Offers stuck beyond configured days
-  const stuckOffers = await Candidate.aggregate([
-    {
-      $match: {
-        status: 'OFFERED',
-        deletedAt: null,
-        offeredAt: { $lte: offerStuckCutoff },
-      },
-    },
-    { $sort: { offeredAt: 1 } },
-    { $limit: 5 },
-    {
-      $lookup: {
-        from: 'requirements',
-        localField: 'requirementId',
-        foreignField: '_id',
-        as: 'req',
-      },
-    },
-    { $unwind: { path: '$req', preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 1,
-        name: 1,
-        offeredAt: 1,
-        requirementId: '$req._id',
-        mmdId: '$req.mmdId',
-      },
-    },
-  ])
-
-  stuckOffers.forEach((offer) => {
-    const label = offer.mmdId ? `${offer.mmdId} offer pending` : `Offer pending >${OFFER_STUCK_DAYS || 5} days`
-    redZone.push({
-      id: `offer-${offer._id.toString()}`,
-      title: label,
-      detail: offer.name,
-      href: '/dashboard/requirements?status=OFFER',
-      severity: 'high',
+    stuckOffers.forEach((offer) => {
+      const label = offer.mmdId ? `${offer.mmdId} offer pending` : `Offer pending >${OFFER_STUCK_DAYS || 5} days`
+      redZone.push({
+        id: `offer-${offer._id.toString()}`,
+        title: label,
+        detail: offer.name,
+        href: '/dashboard/requirements?status=OFFER',
+        severity: 'high',
+      })
     })
-  })
 
-  // Recruiters with zero activity today
-  const recruiters = await User.find({ role: 'RECRUITER', isActive: true, deletedAt: null })
-    .select('_id name')
-    .limit(20)
-    .lean()
+    const activeUserIds = new Set<string>(todayActivityByUser.map((activity) => activity._id?.toString()))
+    const idleRecruiters = recruiters
+      .filter((recruiter) => !activeUserIds.has(recruiter._id?.toString() || ''))
+      .slice(0, 5)
 
-  const todayActivityByUser = await Activity.aggregate([
-    { $match: { createdAt: { $gte: idleActivityCutoff, $lte: todayEnd } } },
-    { $group: { _id: '$userId', count: { $sum: 1 } } },
-  ])
-
-  const activeUserIds = new Set<string>(todayActivityByUser.map((a) => a._id?.toString()))
-  const idleRecruiters = recruiters.filter((r) => !activeUserIds.has(r._id?.toString() || '')).slice(0, 5)
-
-  idleRecruiters.forEach((r) => {
-    redZone.push({
-      id: `idle-${r._id?.toString()}`,
-      title: `${r.name || 'Recruiter'} has 0 uploads today`,
-      detail: 'Nudge for activity',
-      href: '/dashboard/leads',
-      severity: 'medium',
+    idleRecruiters.forEach((recruiter) => {
+      redZone.push({
+        id: `idle-${recruiter._id?.toString()}`,
+        title: `${recruiter.name || 'Recruiter'} has 0 uploads today`,
+        detail: 'Nudge for activity',
+        href: '/dashboard/leads',
+        severity: 'medium',
+      })
     })
-  })
+  }
 
   // Fetch Audit Logs (Recent Critical Actions)
   // Only for Admins usually, but we are inside getDashboardMetrics which is role-aware.
   // We'll limit this to 5 most recent logs.
-  let auditLogs: any[] = []
+  let auditLogs: Array<{
+    _id: string
+    action: string
+    entity: string
+    summary: string
+    createdAt: Date
+    userName: string
+  }> = []
 
-  if ((['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(user.role))) {
+  if (isAdmin) {
     try {
       const AuditLog = (await import('@/lib/db/models/AuditLog')).default
-      const User = (await import('@/lib/db/models/User')).default
 
       const logs = await AuditLog.find()
         .sort({ createdAt: -1 })
@@ -343,29 +483,28 @@ export async function getDashboardMetrics(user: RoleUser) {
         .lean()
 
       // Populate user details manually or via simple lookup if needed
-      const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))]
+      const userIds = [...new Set(logs.map((log) => log.userId?.toString()).filter(Boolean))]
       const users = await User.find({ _id: { $in: userIds } }).select('name').lean()
-      const userMap = Object.fromEntries(users.map(u => [u._id.toString(), u]))
+      const userMap = new Map(users.map((dbUser) => [dbUser._id.toString(), dbUser.name]))
 
-      auditLogs = logs.map(log => ({
+      auditLogs = logs.map((log) => ({
         _id: log._id.toString(),
         action: log.action,
         entity: log.entity,
         summary: `${log.action} on ${log.entity}`, // Simplified summary
-        createdAt: log.createdAt,
-        userName: log.userId ? userMap[log.userId.toString()]?.name || 'Unknown' : 'System'
+        createdAt: log.createdAt ?? now,
+        userName: log.userId ? userMap.get(log.userId.toString()) || 'Unknown' : 'System',
       }))
-    } catch (e) {
-      console.error("Failed to fetch audit logs for dashboard", e)
+    } catch (error) {
+      console.error('Failed to fetch audit logs for dashboard', error)
     }
   }
 
-  // System Health Mock (Real implementation would check DB connection status etc)
-  // Since we are here, DB is connected.
+  // System health is derived from server processing latency to avoid random values.
   const systemHealth = {
-    dbStatus: 'connected', // We queried DB successfully above
-    latency: Math.floor(Math.random() * 50) + 10, // Mock latency 10-60ms
-    errorRate: 0.1 // Mock low error rate
+    dbStatus: 'connected',
+    latency: Math.max(1, Date.now() - requestStartedAt),
+    errorRate: 0.1,
   }
 
   return {
@@ -384,12 +523,12 @@ export async function getDashboardMetrics(user: RoleUser) {
       created: r.created,
       closed: r.closed,
     })),
-    recentActivities: recentActivities.map((a) => ({
+    recentActivities: cleanedRecentActivities.map((a) => ({
       ...a,
       _id: a._id.toString(),
       requirementId: a.requirementId?.toString(),
     })),
-    urgentFollowUps: urgentFollowUps.map((f) => ({
+    urgentFollowUps: cleanedUrgentFollowUps.map((f) => ({
       ...f,
       _id: f._id.toString(),
       requirementId: f.requirementId?.toString(),

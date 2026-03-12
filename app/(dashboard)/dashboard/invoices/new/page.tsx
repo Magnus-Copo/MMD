@@ -48,13 +48,14 @@ export default function CreateInvoicePage() {
 
     const { data: session } = useSession()
     const role = session?.user?.role || 'RECRUITER'
+    const canCreateInvoice = role === 'SUPER_ADMIN' || role === 'COORDINATOR'
 
     useEffect(() => {
-        if ((['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any))) {
-            toast.error("Access Denied", "Admins cannot create invoices")
+        if (!canCreateInvoice) {
+            toast.error("Access Denied", "Only Super Admin and Coordinators can create invoices")
             router.push('/dashboard/invoices')
         }
-    }, [role, router, toast])
+    }, [canCreateInvoice, router, toast])
 
     // Fetch Companies on Mount
     useEffect(() => {
@@ -110,6 +111,10 @@ export default function CreateInvoicePage() {
 
             if (formData.placementId) {
                 payload.placementId = formData.placementId
+            }
+
+            if (formData.dueDate) {
+                payload.dueDate = formData.dueDate
             }
 
             const res = await createInvoice(payload)
@@ -229,6 +234,18 @@ export default function CreateInvoicePage() {
                                     { label: 'EUR (€)', value: 'EUR' },
                                     { label: 'GBP (£)', value: 'GBP' }
                                 ]}
+                                disabled={loading}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                <Calendar className="w-4 h-4" /> Due Date
+                            </label>
+                            <Input
+                                type="date"
+                                value={formData.dueDate}
+                                onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
                                 disabled={loading}
                             />
                         </div>

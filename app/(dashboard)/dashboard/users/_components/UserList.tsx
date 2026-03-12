@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { Shield, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import { deleteUser, updateUserRole } from '@/lib/actions/module1-auth'
 import { Modal, ConfirmDialog } from '@/components/ui/Modal'
@@ -11,7 +11,7 @@ interface User {
     _id: string
     name: string
     email: string
-    role: 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER'
+    role: 'SUPER_ADMIN' | 'ADMIN' | 'COORDINATOR' | 'RECRUITER' | 'SCRAPER'
     isActive: boolean
     createdAt: string
     lastLogin?: string
@@ -29,6 +29,10 @@ export default function UserList({ initialUsers }: Readonly<UserListProps>) {
     const [isPending, startTransition] = useTransition()
     const { success, error } = useToast()
     const router = useRouter()
+
+    useEffect(() => {
+        setUsers(initialUsers)
+    }, [initialUsers])
 
     const handleDelete = async () => {
         if (!selectedUser) return
@@ -92,7 +96,7 @@ export default function UserList({ initialUsers }: Readonly<UserListProps>) {
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                    ${(['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) ? 'bg-purple-100 text-purple-800' :
+                    ${(['SUPER_ADMIN', 'ADMIN'].includes(user.role)) ? 'bg-purple-100 text-purple-800' :
                                             user.role === 'COORDINATOR' ? 'bg-blue-100 text-blue-800' :
                                                 user.role === 'SCRAPER' ? 'bg-amber-100 text-amber-800' :
                                                     'bg-slate-100 text-slate-800'}`}>

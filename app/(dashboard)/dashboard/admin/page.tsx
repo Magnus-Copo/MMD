@@ -11,6 +11,7 @@ import {
   Activity,
   Clock,
   AlertTriangle,
+  Archive,
   ChevronRight,
   RefreshCw,
   Loader2,
@@ -229,7 +230,7 @@ export default function AdminPage() {
       </div>
 
       {/* Quick Links */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <button
           onClick={() => router.push('/dashboard/users')}
           className="flex items-center gap-3 p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors text-left"
@@ -258,6 +259,16 @@ export default function AdminPage() {
           <div>
             <p className="font-medium text-slate-900 dark:text-white">Reports</p>
             <p className="text-xs text-slate-500">Generate & schedule reports</p>
+          </div>
+        </button>
+        <button
+          onClick={() => router.push('/dashboard/admin/archive')}
+          className="flex items-center gap-3 p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors text-left"
+        >
+          <Archive className="h-5 w-5 text-rose-500" />
+          <div>
+            <p className="font-medium text-slate-900 dark:text-white">Archive Management</p>
+            <p className="text-xs text-slate-500">Restore soft-deleted records</p>
           </div>
         </button>
       </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { regenerateContentAction } from "@/lib/actions/module5-automation"
+import { generateRequirementAutomationAction, regenerateContentAction } from "@/lib/actions/module5-automation"
 
 const tabs = [
   { key: "form", label: "Application Form" },
@@ -23,7 +23,15 @@ interface AutomationPanelProps {
 }
 
 export function AutomationPanel({ requirementId, formUrl, content }: Readonly<AutomationPanelProps>) {
+  const toAbsoluteFormUrl = (url?: string | null) => {
+    if (!url) return ""
+    if (/^https?:\/\//i.test(url)) return url
+    if (typeof window === "undefined") return url
+    return `${window.location.origin}${url.startsWith("/") ? "" : "/"}${url}`
+  }
+
   const [active, setActive] = useState<TabKey>("form")
+  const [currentFormUrl, setCurrentFormUrl] = useState(toAbsoluteFormUrl(formUrl))
   const [draft, setDraft] = useState({
     whatsapp: content.whatsapp ?? "",
     email: content.email ?? "",
@@ -31,6 +39,45 @@ export function AutomationPanel({ requirementId, formUrl, content }: Readonly<Au
   })
   const [message, setMessage] = useState<string>("")
   const [isPending, startTransition] = useTransition()
+
+  const onGenerateAutomation = () => {
+    startTransition(async () => {
+      setMessage("")
+      try {
+        const result = await generateRequirementAutomationAction({ requirementId })
+        if (!result?.success || !result.data) {
+          setMessage(result?.error || "Failed to generate automation")
+          return
+        }
+
+        const data = result.data as {
+          shareableUrl?: string
+          content?: {
+            whatsapp?: string | null
+            email?: string | null
+            linkedIn?: string | null
+          }
+        }
+
+        if (data.shareableUrl) {
+          setCurrentFormUrl(toAbsoluteFormUrl(data.shareableUrl))
+        }
+
+        if (data.content) {
+          setDraft((prev) => ({
+            ...prev,
+            whatsapp: data.content?.whatsapp ?? prev.whatsapp,
+            email: data.content?.email ?? prev.email,
+            linkedIn: data.content?.linkedIn ?? prev.linkedIn,
+          }))
+        }
+
+        setMessage("Automation generated")
+      } catch {
+        setMessage("Failed to generate automation")
+      }
+    })
+  }
 
   const onRegenerate = (type: "whatsapp" | "email" | "linkedIn") => {
     startTransition(async () => {
@@ -75,20 +122,28 @@ export function AutomationPanel({ requirementId, formUrl, content }: Readonly<Au
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Shareable URL</span>
-            {formUrl ? (
-              <code className="px-2 py-1 rounded bg-muted text-xs font-mono flex-1 truncate">{formUrl}</code>
+            {currentFormUrl ? (
+              <code className="px-2 py-1 rounded bg-muted text-xs font-mono flex-1 truncate">{currentFormUrl}</code>
             ) : (
-              <span className="text-xs text-destructive">Form not generated</span>
+              <span className="text-xs text-destructive">Form URL not available yet</span>
             )}
-            {formUrl && (
+            {currentFormUrl && (
               <button
                 className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:opacity-90"
-                onClick={() => copy(formUrl)}
+                onClick={() => copy(currentFormUrl)}
               >
                 Copy Link
               </button>
             )}
           </div>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={onGenerateAutomation}
+            className="rounded bg-primary px-3 py-2 text-white text-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {currentFormUrl ? 'Regenerate Automation' : 'Generate Form + Content'}
+          </button>
           <p className="text-xs text-cyan-400">Auto-generated</p>
         </div>
       )
@@ -113,7 +168,7 @@ export function AutomationPanel({ requirementId, formUrl, content }: Readonly<Au
           <button
             type="button"
             disabled={isPending}
-            onClick={() => onRegenerate(active as any)}
+            onClick={() => onRegenerate(active)}
             className="rounded bg-primary px-3 py-2 text-white text-sm hover:opacity-90 disabled:opacity-50"
           >
             Regenerate {label}

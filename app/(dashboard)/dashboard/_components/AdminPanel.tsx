@@ -416,7 +416,7 @@ export function AdminDashboard({ metrics, userName }: Readonly<AdminDashboardPro
 
           <motion.div variants={cardVariants}>
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xl shadow-slate-200/50 p-6 hover:shadow-2xl transition-shadow duration-300">
-              <FollowUpList followUps={urgentFollowUps} title="Urgent Follow-ups" />
+              <FollowUpList followUps={urgentFollowUps} title="Urgent Follow-ups" maxItems={8} viewAllHref="/dashboard/activities" />
             </div>
           </motion.div>
         </div>
@@ -468,7 +468,7 @@ export function AdminDashboard({ metrics, userName }: Readonly<AdminDashboardPro
 
           <motion.div variants={cardVariants}>
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xl shadow-slate-200/50 p-6 hover:shadow-2xl transition-shadow duration-300">
-              <ActivityTable activities={recentActivities} title="Recent Activity" showUser />
+              <ActivityTable activities={recentActivities} title="Recent Activity" showUser maxItems={10} viewAllHref="/dashboard/activities" />
             </div>
           </motion.div>
 

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback, memo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Briefcase,
   Plus,
@@ -21,31 +21,35 @@ import {
   Building2,
   Target,
   Download,
-  Calendar,
   AlertCircle,
   Archive,
   ArrowUpRight,
-  Filter,
-  BarChart3
+  Filter
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, getRequirementIdSectorCode } from '@/lib/utils'
 import Button, { IconButton } from '@/components/ui/Button'
 import { SearchInput, Select } from '@/components/ui/Input'
-import { Modal, ConfirmDialog, Drawer } from '@/components/ui/Modal'
+import { Modal, ConfirmDialog } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { Combobox } from '@/components/ui/Combobox'
-import { getRequirements, createRequirement, updateRequirement, deleteRequirement, freezeRequirement, reassignRequirement } from '@/lib/actions/requirements'
+import {
+  getRequirements,
+  createRequirementAction,
+  updateRequirementAction,
+  updateRequirementStatusAction,
+  deleteRequirementAction,
+  freezeRequirementAction,
+  reassignRequirementAction,
+} from '@/lib/actions/module4-requirement'
 import { getCompanies } from '@/lib/actions/module3-company'
 import { AutomationPanel } from '@/components/automation/AutomationPanel'
-import { createExportJobAction } from '@/lib/actions/module15-export'
-
-// Stable skeleton placeholder IDs
-const SKELETON_IDS = ['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5', 'sk-6'] as const
+import { createExportJobAction, listExportJobsAction } from '@/lib/actions/module15-export'
 
 // Types
 interface Requirement {
   id: string
   mmdId: string
+  group: 'RASHMI' | 'MANJUNATH' | 'SCRAPING' | 'LEADS'
   title: string
   company: string
   companyId: string
@@ -60,11 +64,354 @@ interface Requirement {
   submissions: number
   interviews: number
   skills: string[]
+  experienceMin: number
+  experienceMax: number
   createdAt: string
   deadline?: string
   description?: string
+  applicationFormId?: string | null
+  whatsAppMessage?: string | null
+  emailMessage?: string | null
+  linkedInPost?: string | null
   lastActivityAt?: string
+  daysSinceActivity?: number | null
   stalled?: boolean
+}
+
+interface SelectOption {
+  value: string
+  label: string
+}
+
+interface RequirementCompany {
+  _id: string
+  name: string
+  location?: string
+  sector?: string
+  mouStatus?: string
+  mouEndDate?: string | Date | null
+}
+
+type MouEligibilityReason = 'ACTIVE' | 'NOT_SIGNED'
+
+interface MouEligibilityState {
+  active: boolean
+  reason: MouEligibilityReason
+}
+
+interface ExportJobItem {
+  _id: string
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  format: 'CSV' | 'JSON' | 'XLSX'
+  createdAt: string
+  fileUrl?: string
+  errorMessage?: string
+}
+
+function extractCompanyItems(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload
+  if (!payload || typeof payload !== 'object') return []
+
+  const source = payload as Record<string, unknown>
+  if (Array.isArray(source.companies)) return source.companies
+  if (Array.isArray(source.items)) return source.items
+  if (Array.isArray(source.data)) return source.data
+
+  return []
+}
+
+function normalizeCompanyPayload(payload: unknown): RequirementCompany[] {
+  const items = extractCompanyItems(payload)
+  const deduped = new Map<string, RequirementCompany>()
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+
+    const record = item as Record<string, unknown>
+    const idCandidate = record._id ?? record.id
+    const nameCandidate = record.name ?? record.companyName
+
+    const id = typeof idCandidate === 'string' ? idCandidate.trim() : ''
+    const name = typeof nameCandidate === 'string' ? nameCandidate.trim() : ''
+
+    if (!id || !name) continue
+
+    const normalized: RequirementCompany = {
+      _id: id,
+      name,
+      location: typeof record.location === 'string' ? record.location : undefined,
+      sector: typeof record.sector === 'string' ? record.sector : undefined,
+      mouStatus: typeof record.mouStatus === 'string' ? record.mouStatus : undefined,
+      mouEndDate: typeof record.mouEndDate === 'string' || record.mouEndDate instanceof Date || record.mouEndDate === null
+        ? (record.mouEndDate as string | Date | null)
+        : undefined,
+    }
+
+    if (!deduped.has(normalized._id)) {
+      deduped.set(normalized._id, normalized)
+    }
+  }
+
+  return Array.from(deduped.values())
+}
+
+function normalizeExportJobs(items: unknown): ExportJobItem[] {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .map((item: any) => {
+      if (!item || typeof item !== 'object') return null
+      const id = typeof item._id === 'string' ? item._id : ''
+      if (!id) return null
+
+      return {
+        _id: id,
+        status: item.status || 'PENDING',
+        format: item.format || 'CSV',
+        createdAt: item.createdAt || '',
+        fileUrl: typeof item.fileUrl === 'string' ? item.fileUrl : undefined,
+        errorMessage: typeof item.errorMessage === 'string' ? item.errorMessage : undefined,
+      } as ExportJobItem
+    })
+    .filter((item): item is ExportJobItem => Boolean(item))
+}
+
+function inferDefaultGroup(name: string | null | undefined, role: string | undefined): Requirement['group'] {
+  const normalizedName = (name || '').toUpperCase()
+
+  if (role === 'SCRAPER') return 'SCRAPING'
+  if (normalizedName.includes('RASHMI')) return 'RASHMI'
+  if (normalizedName.includes('MANJUNATH')) return 'MANJUNATH'
+
+  return 'LEADS'
+}
+
+function normalizeMouStatus(value?: string): string {
+  return (value || '').trim().toUpperCase()
+}
+
+function formatMouStatusLabel(value?: string): string {
+  const normalized = normalizeMouStatus(value)
+  if (!normalized) return 'not started'
+  return normalized.replace(/_/g, ' ').toLowerCase()
+}
+
+function getRequirementMouEligibility(company: { mouStatus?: string; mouEndDate?: string | Date | null } | undefined): MouEligibilityState {
+  if (!company) return { active: false, reason: 'NOT_SIGNED' }
+
+  const normalizedStatus = normalizeMouStatus(company.mouStatus)
+  if (normalizedStatus !== 'SIGNED') {
+    return { active: false, reason: 'NOT_SIGNED' }
+  }
+
+  // Manual testing mode: signed status alone is enough for Add Requirement eligibility.
+
+  return { active: true, reason: 'ACTIVE' }
+}
+
+function getRequirementMouSubtitle(company: RequirementCompany, eligibility: MouEligibilityState): string {
+  if (eligibility.active) return 'MOU signed'
+
+  return `MOU ${formatMouStatusLabel(company.mouStatus)}`
+}
+
+function hasActiveRequirementMou(company: { mouStatus?: string; mouEndDate?: string | Date | null } | undefined) {
+  return getRequirementMouEligibility(company).active
+}
+
+function formatWorkMode(workMode?: string): string {
+  if (workMode === 'HYBRID') return 'Hybrid'
+  if (workMode === 'ONSITE') return 'On-site'
+  return 'Remote'
+}
+
+function parseWorkMode(locationType: string): 'REMOTE' | 'HYBRID' | 'ONSITE' {
+  const normalized = locationType.trim().toLowerCase()
+  if (normalized === 'hybrid') return 'HYBRID'
+  if (normalized === 'on-site' || normalized === 'onsite') return 'ONSITE'
+  return 'REMOTE'
+}
+
+function formatBudget(salaryMin?: number | null, salaryMax?: number | null): string {
+  if (!salaryMin && !salaryMax) return 'Not specified'
+  if (salaryMin && salaryMax) return `₹${(salaryMin / 100000).toFixed(1)}L - ₹${(salaryMax / 100000).toFixed(1)}L`
+  if (salaryMin) return `₹${(salaryMin / 100000).toFixed(1)}L+`
+  return `Up to ₹${((salaryMax || 0) / 100000).toFixed(1)}L`
+}
+
+function parseBudgetValue(token: string): number | undefined {
+  const normalized = token.replace(/,/g, '').trim().toLowerCase()
+  const numeric = Number.parseFloat(normalized)
+  if (!Number.isFinite(numeric)) return undefined
+
+  if (normalized.includes('cr')) return Math.round(numeric * 10000000)
+  if (normalized.includes('lac') || normalized.includes('lakh') || /\d(?:\.\d+)?l\b/.test(normalized)) {
+    return Math.round(numeric * 100000)
+  }
+  if (normalized.includes('k')) return Math.round(numeric * 1000)
+  return Math.round(numeric)
+}
+
+function parseBudgetRange(budget: string | undefined): { salaryMin?: number; salaryMax?: number } {
+  if (!budget?.trim()) return {}
+
+  const matches = budget.match(/\d+(?:\.\d+)?\s*(?:cr|crore|lac|lakh|l|k)?/gi) || []
+  const parsed = matches
+    .map(parseBudgetValue)
+    .filter((value): value is number => typeof value === 'number')
+
+  if (parsed.length >= 2) {
+    return { salaryMin: parsed[0], salaryMax: parsed[1] }
+  }
+
+  if (parsed.length === 1) {
+    if (/up to|max/i.test(budget)) return { salaryMax: parsed[0] }
+    return { salaryMin: parsed[0] }
+  }
+
+  return {}
+}
+
+function buildRequirementDescription(payload: {
+  title: string
+  company: string
+  location: string
+  budget: string
+  skills: string[]
+  description?: string
+}): string {
+  const explicitDescription = payload.description?.trim()
+  if (explicitDescription && explicitDescription.length >= 50) return explicitDescription
+
+  const fallback = [
+    `Requirement for ${payload.title} at ${payload.company || 'the selected company'}.`,
+    `Location: ${payload.location || 'To be confirmed'}.`,
+    `Budget: ${payload.budget || 'To be finalized'}.`,
+    `Core skills: ${(payload.skills.length > 0 ? payload.skills : ['General hiring']).join(', ')}.`,
+    explicitDescription,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+
+  return fallback.length >= 50
+    ? fallback
+    : `${fallback} Additional hiring details will be added during intake.`.trim()
+}
+
+function mapRequirement(raw: Record<string, unknown>): Requirement {
+  const id = String(raw.id ?? raw._id ?? '')
+  const company = typeof raw.company === 'string'
+    ? raw.company
+    : (raw.company as { name?: string } | undefined)?.name || (raw.companyDetails as { name?: string } | undefined)?.name || 'Unknown Company'
+
+  const companyId = typeof raw.companyId === 'string'
+    ? raw.companyId
+    : String((raw.companyId as { _id?: string } | undefined)?._id || (raw.companyDetails as { _id?: string } | undefined)?._id || '')
+
+  const owner = typeof raw.owner === 'string'
+    ? raw.owner
+    : (raw.accountOwnerId as { name?: string } | undefined)?.name || 'Unassigned'
+
+  const title = String(raw.title ?? raw.jobTitle ?? 'Untitled Position')
+  const skills = Array.isArray(raw.skills)
+    ? raw.skills.filter((skill): skill is string => typeof skill === 'string')
+    : []
+
+  const deadline = raw.deadline
+    ? String(raw.deadline)
+    : raw.interviewClosingDate
+      ? new Date(String(raw.interviewClosingDate)).toISOString().slice(0, 10)
+      : ''
+
+  const lastActivityAt = raw.lastActivityAt ? String(raw.lastActivityAt) : undefined
+
+  return {
+    id,
+    mmdId: String(raw.mmdId ?? ''),
+    group: (raw.group as Requirement['group']) || 'LEADS',
+    title,
+    company,
+    companyId,
+    location: String(raw.location ?? ''),
+    locationType: String(raw.locationType ?? formatWorkMode(String(raw.workMode ?? 'REMOTE'))),
+    status: String(raw.status ?? 'PENDING_INTAKE'),
+    priority: String(raw.priority ?? 'Medium'),
+    owner,
+    budget: typeof raw.budget === 'string' ? raw.budget : formatBudget(raw.salaryMin as number | undefined, raw.salaryMax as number | undefined),
+    openings: Number(raw.openings ?? 1),
+    filledPositions: Number(raw.filledPositions ?? 0),
+    submissions: Number(raw.submissions ?? 0),
+    interviews: Number(raw.interviews ?? 0),
+    skills,
+    experienceMin: Number(raw.experienceMin ?? 0),
+    experienceMax: Number(raw.experienceMax ?? 0),
+    createdAt: raw.createdAt ? new Date(String(raw.createdAt)).toISOString() : new Date().toISOString(),
+    deadline,
+    description: String(raw.description ?? raw.fullDescription ?? ''),
+    applicationFormId: typeof raw.applicationFormId === 'string' ? raw.applicationFormId : null,
+    whatsAppMessage: typeof raw.whatsAppMessage === 'string' ? raw.whatsAppMessage : null,
+    emailMessage: typeof raw.emailMessage === 'string' ? raw.emailMessage : null,
+    linkedInPost: typeof raw.linkedInPost === 'string' ? raw.linkedInPost : null,
+    lastActivityAt,
+    daysSinceActivity: calculateDaysSinceActivity(lastActivityAt),
+    stalled: Boolean(raw.stalled),
+  }
+}
+
+const REQUIREMENT_FILTER_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'PENDING_INTAKE', label: 'Pending Intake' },
+  { value: 'AWAITING_JD', label: 'Awaiting JD' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'SOURCING', label: 'Sourcing' },
+  { value: 'INTERVIEWING', label: 'Interviewing' },
+  { value: 'OFFER', label: 'Offer' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'STALLED', label: 'Stalled (idle)' },
+  { value: 'CLOSED_HIRED', label: 'Closed Hired' },
+  { value: 'CLOSED_NOT_HIRED', label: 'Closed Not Hired' },
+]
+
+const REQUIREMENT_FILTER_STATUS_VALUES = new Set(REQUIREMENT_FILTER_STATUS_OPTIONS.map((option) => option.value))
+const REQUIREMENT_FILTER_PRIORITY_VALUES = new Set(['all', 'High', 'Medium', 'Low'])
+const REQUIREMENTS_PAGE_SIZE = 24
+
+const REQUIREMENT_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'PENDING_INTAKE', label: 'Pending Intake' },
+  { value: 'AWAITING_JD', label: 'Awaiting JD' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'SOURCING', label: 'Sourcing' },
+  { value: 'INTERVIEWING', label: 'Interviewing' },
+  { value: 'OFFER', label: 'Offer' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'CLOSED_HIRED', label: 'Closed Hired' },
+  { value: 'CLOSED_NOT_HIRED', label: 'Closed Not Hired' },
+]
+
+const REQUIREMENT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+})
+
+function formatRequirementDate(value?: string | Date | null) {
+  if (!value) return null
+
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  return REQUIREMENT_DATE_FORMATTER.format(date)
+}
+
+function calculateDaysSinceActivity(value?: string) {
+  if (!value) return null
+
+  const timestamp = new Date(value).getTime()
+  if (Number.isNaN(timestamp)) return null
+
+  return Math.max(0, Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24)))
 }
 
 // Status Configuration
@@ -184,7 +531,7 @@ function PriorityBadge({ priority }: Readonly<{ priority: Requirement['priority'
 }
 
 // Requirement Card Component
-function RequirementCard({
+const RequirementCard = memo(function RequirementCard({
   requirement,
   onView,
   onEdit,
@@ -210,14 +557,10 @@ function RequirementCard({
   hideFinancials?: boolean
 }>) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const daysSinceActivity = requirement.daysSinceActivity ?? calculateDaysSinceActivity(requirement.lastActivityAt)
   const fillPercentage = requirement.openings > 0
     ? Math.round((requirement.filledPositions / requirement.openings) * 100)
     : 0
-
-  const lastActivityDate = requirement.lastActivityAt ? new Date(requirement.lastActivityAt) : null
-  const daysSinceActivity = lastActivityDate
-    ? Math.max(0, Math.floor((Date.now() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24)))
-    : null
 
   return (
     <div className="group relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-xl shadow-slate-200/50 dark:shadow-black/20 rounded-2xl p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-violet-500/30 dark:hover:border-violet-500/30">
@@ -348,7 +691,7 @@ function RequirementCard({
           {requirement.deadline && (
             <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
               <Clock className="w-3 h-3" />
-              {new Date(requirement.deadline).toLocaleDateString('en-US')}
+              {formatRequirementDate(requirement.deadline)}
             </span>
           )}
         </div>
@@ -412,7 +755,18 @@ function RequirementCard({
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.requirement === nextProps.requirement &&
+    prevProps.canEdit === nextProps.canEdit &&
+    prevProps.canDelete === nextProps.canDelete &&
+    prevProps.canFreeze === nextProps.canFreeze &&
+    prevProps.canReassign === nextProps.canReassign &&
+    prevProps.hideFinancials === nextProps.hideFinancials
+  )
+})
+
+RequirementCard.displayName = 'RequirementCard'
 
 function RequirementDrawer({
   requirement,
@@ -424,6 +778,9 @@ function RequirementDrawer({
   onClose: () => void
 }) {
   if (!requirement) return null
+
+  const createdOnLabel = formatRequirementDate(requirement.createdAt) || 'Unknown'
+  const deadlineLabel = formatRequirementDate(requirement.deadline) || 'Open Ended'
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Requirement Case File" size="xl">
@@ -450,7 +807,7 @@ function RequirementDrawer({
               <Building2 className="w-4 h-4" />
               <span>{requirement.company}</span>
             </div>
-            <p className="text-xs text-slate-400">Created on: {new Date().toLocaleDateString('en-US')}</p>
+            <p className="text-xs text-slate-400">Created on: {createdOnLabel}</p>
           </div>
         </div>
 
@@ -507,7 +864,7 @@ function RequirementDrawer({
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1">Closure Deadline</label>
                 <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium">
                   <Clock className="w-4 h-4 text-rose-400" />
-                  {requirement.deadline ? new Date(requirement.deadline).toLocaleDateString('en-US') : 'Open Ended'}
+                  {deadlineLabel}
                 </div>
               </div>
             </div>
@@ -531,6 +888,18 @@ function RequirementDrawer({
             </div>
           </div>
         </div>
+
+        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-6">
+          <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Automation Hub</h3>
+          <AutomationPanel
+            requirementId={requirement.id}
+            content={{
+              whatsapp: requirement.whatsAppMessage,
+              email: requirement.emailMessage,
+              linkedIn: requirement.linkedInPost,
+            }}
+          />
+        </div>
       </div>
     </Modal>
   )
@@ -540,15 +909,20 @@ function RequirementDrawer({
 export default function RequirementsPage() {
   const toast = useToast()
   const { data: session, status: sessionStatus } = useSession()
+  const router = useRouter()
+  const pathname = usePathname()
   const role = session?.user?.role
   const canCreate = (['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any)) || role === 'COORDINATOR'
   const canEdit = canCreate
   const canDelete = (['SUPER_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(role as any))
   const searchParams = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
+  // Keep the first render deterministic for SSR hydration; URL params are applied in an effect.
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterPriority, setFilterPriority] = useState<string>(searchParams.get('priority') || 'all')
+  const [filterPriority, setFilterPriority] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('recent')
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Modal States
   const [selectedRequirement, setSelectedRequirement] = useState<Requirement | null>(null)
@@ -559,8 +933,56 @@ export default function RequirementsPage() {
 
   const [requirements, setRequirements] = useState<Requirement[]>([]) // Start empty, fetch real data
   const [isLoading, setIsLoading] = useState(true)
-  const [companies, setCompanies] = useState<Array<{ _id: string; name: string; location?: string }>>([])
+  const [companies, setCompanies] = useState<RequirementCompany[]>([])
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false)
+  const [companiesLoadError, setCompaniesLoadError] = useState<string | null>(null)
+  const [exportJobs, setExportJobs] = useState<ExportJobItem[]>([])
+  const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(false)
+  const defaultGroup = useMemo(() => inferDefaultGroup(session?.user?.name, role), [role, session?.user?.name])
+
+  const setQueryParam = useCallback((key: string, value?: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (!value) {
+      params.delete(key)
+    } else {
+      params.set(key, value)
+    }
+
+    const nextQuery = params.toString()
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams])
+
+  const closeViewDrawer = useCallback(() => {
+    setIsViewDrawerOpen(false)
+    setSelectedRequirement(null)
+    setQueryParam('view')
+  }, [setQueryParam])
+
+  useEffect(() => {
+    const queryFromUrl = searchParams.get('q') || ''
+    setSearchInput((current) => (current === queryFromUrl ? current : queryFromUrl))
+    setSearchQuery((current) => (current === queryFromUrl ? current : queryFromUrl))
+
+    const statusFromUrl = searchParams.get('status') || 'all'
+    const normalizedStatus = REQUIREMENT_FILTER_STATUS_VALUES.has(statusFromUrl) ? statusFromUrl : 'all'
+    setFilterStatus((current) => (current === normalizedStatus ? current : normalizedStatus))
+
+    const priorityFromUrl = searchParams.get('priority') || 'all'
+    const normalizedPriority = REQUIREMENT_FILTER_PRIORITY_VALUES.has(priorityFromUrl) ? priorityFromUrl : 'all'
+    setFilterPriority((current) => (current === normalizedPriority ? current : normalizedPriority))
+  }, [searchParams])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchInput, filterStatus, filterPriority, sortBy])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchQuery((current) => (current === searchInput ? current : searchInput))
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
 
   // Fetch Data
   const fetchData = async () => {
@@ -572,7 +994,10 @@ export default function RequirementsPage() {
       stalled: filterStatus === 'STALLED' ? true : undefined,
     })
     if (res.success) {
-      setRequirements(res.data)
+      const mapped = Array.isArray(res.data)
+        ? (res.data as Record<string, unknown>[]).map(mapRequirement)
+        : []
+      setRequirements(mapped)
     } else {
       toast.error('Error', res.error || 'Failed to fetch requirements')
     }
@@ -586,37 +1011,80 @@ export default function RequirementsPage() {
   }, [filterStatus, sessionStatus])
 
   // Fetch companies for the dropdown
-  const fetchCompanies = async () => {
+  const fetchCompanies = useCallback(async () => {
     if (sessionStatus !== 'authenticated') return
 
     setIsLoadingCompanies(true)
+    setCompaniesLoadError(null)
     const res = await getCompanies({})
     if (res.success) {
-      setCompanies((res.data || []) as any)
+      const normalizedCompanies = normalizeCompanyPayload(res.data)
+      setCompanies(normalizedCompanies)
+
+      if (extractCompanyItems(res.data).length > 0 && normalizedCompanies.length === 0) {
+        setCompaniesLoadError('Company records were returned in an unexpected format. Please refresh and try again.')
+      }
     } else {
+      setCompanies([])
+      setCompaniesLoadError(res.error || 'Failed to fetch companies')
       toast.error('Error', res.error || 'Failed to fetch companies')
     }
     setIsLoadingCompanies(false)
-  }
+  }, [sessionStatus, toast])
 
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
-      fetchCompanies()
+      void fetchCompanies()
     }
+  }, [sessionStatus, fetchCompanies])
+
+  const loadExportJobs = useCallback(async () => {
+    if (sessionStatus !== 'authenticated') return
+
+    setIsLoadingExportJobs(true)
+    const result = await listExportJobsAction({ entityType: 'REQUIREMENT', limit: 5 })
+    if (result.success) {
+      setExportJobs(normalizeExportJobs(result.data))
+    }
+    setIsLoadingExportJobs(false)
   }, [sessionStatus])
+
+  useEffect(() => {
+    if (sessionStatus === 'authenticated') {
+      loadExportJobs()
+    }
+  }, [sessionStatus, loadExportJobs])
+
+  // Sync deep-link view query to the in-page drawer so all entry points share one UI.
+  useEffect(() => {
+    const viewTarget = (searchParams.get('view') || '').trim().toLowerCase()
+    if (!viewTarget || requirements.length === 0) return
+
+    const matchedRequirement = requirements.find((requirement) => {
+      const idMatch = requirement.id.toLowerCase() === viewTarget
+      const mmdMatch = requirement.mmdId.toLowerCase() === viewTarget
+      return idMatch || mmdMatch
+    })
+
+    if (!matchedRequirement) return
+
+    if (selectedRequirement?.id !== matchedRequirement.id) {
+      setSelectedRequirement(matchedRequirement)
+    }
+    if (!isViewDrawerOpen) {
+      setIsViewDrawerOpen(true)
+    }
+  }, [isViewDrawerOpen, requirements, searchParams, selectedRequirement?.id])
 
   // Handle action parameter for creating new requirements
   useEffect(() => {
-    if (typeof window !== 'undefined' && canCreate) {
-      const sp = new URLSearchParams(window.location.search)
-      if (sp.get('action') === 'new') {
-        const url = new URL(window.location.href)
-        url.searchParams.delete('action')
-        window.history.replaceState({}, '', url.toString())
-        setIsAddModalOpen(true)
-      }
+    if (!canCreate) return
+
+    if (searchParams.get('action') === 'new') {
+      setIsAddModalOpen(true)
+      setQueryParam('action')
     }
-  }, [canCreate])
+  }, [canCreate, searchParams, setQueryParam])
 
   const [formState, setFormState] = useState({
     title: '',
@@ -627,16 +1095,53 @@ export default function RequirementsPage() {
     locationType: 'Remote',
     status: 'ACTIVE',
     priority: 'Medium',
-    owner: '',
+    group: 'LEADS' as Requirement['group'],
     budget: '',
     openings: 1,
     filledPositions: 0,
-    submissions: 0,
-    interviews: 0,
+    experienceMin: 2,
+    experienceMax: 5,
     skills: '',
     deadline: '',
     description: '',
   })
+
+  const eligibleCompanyIds = useMemo(() => {
+    return new Set(
+      companies
+        .filter((company) => hasActiveRequirementMou(company))
+        .map((company) => company._id)
+    )
+  }, [companies])
+
+  const mouSummary = useMemo(() => {
+    return companies.reduce(
+      (acc, company) => {
+        if (normalizeMouStatus(company.mouStatus) === 'SIGNED') {
+          acc.signed += 1
+          const eligibility = getRequirementMouEligibility(company)
+          if (eligibility.active) {
+            acc.activeSigned += 1
+          }
+        }
+        return acc
+      },
+      { signed: 0, activeSigned: 0 }
+    )
+  }, [companies])
+
+  const selectableCompanies = useMemo(() => {
+    return [...companies].sort((left, right) => {
+      const leftEligible = eligibleCompanyIds.has(left._id)
+      const rightEligible = eligibleCompanyIds.has(right._id)
+
+      if (leftEligible !== rightEligible) {
+        return leftEligible ? -1 : 1
+      }
+
+      return left.name.localeCompare(right.name)
+    })
+  }, [companies, eligibleCompanyIds])
 
   const resetForm = () => {
     setFormState({
@@ -648,18 +1153,27 @@ export default function RequirementsPage() {
       locationType: 'Remote',
       status: 'ACTIVE', // Default to DB enum
       priority: 'Medium',
-      owner: '',
+      group: defaultGroup,
       budget: '',
       openings: 1,
       filledPositions: 0,
-      submissions: 0,
-      interviews: 0,
+      experienceMin: 2,
+      experienceMax: 5,
       skills: '',
       deadline: '',
       description: '',
     })
     setEditingId(null)
   }
+
+  const requirementIdPreview = useMemo(() => {
+    if (editingId && formState.mmdId) return formState.mmdId
+
+    const selectedCompany = companies.find((company) => company._id === formState.companyId)
+    const sectorCode = getRequirementIdSectorCode(selectedCompany?.sector || 'IT')
+    const yearCode = new Date().getFullYear().toString().slice(-2)
+    return `REQ-${yearCode}-${sectorCode}-###`
+  }, [companies, editingId, formState.companyId, formState.mmdId])
 
   // Filter and sort
   const filteredRequirements = useMemo(() => {
@@ -711,21 +1225,53 @@ export default function RequirementsPage() {
     return result
   }, [searchQuery, filterStatus, filterPriority, sortBy, requirements])
 
+  const totalFilteredRequirements = filteredRequirements.length
+  const totalPages = Math.max(1, Math.ceil(totalFilteredRequirements / REQUIREMENTS_PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage((current) => Math.min(current, totalPages))
+  }, [totalPages])
+
+  const paginatedRequirements = useMemo(() => {
+    const startIndex = (currentPage - 1) * REQUIREMENTS_PAGE_SIZE
+    return filteredRequirements.slice(startIndex, startIndex + REQUIREMENTS_PAGE_SIZE)
+  }, [currentPage, filteredRequirements])
+
+  const currentRangeStart = totalFilteredRequirements === 0
+    ? 0
+    : (currentPage - 1) * REQUIREMENTS_PAGE_SIZE + 1
+  const currentRangeEnd = Math.min(currentPage * REQUIREMENTS_PAGE_SIZE, totalFilteredRequirements)
+
   // Stats
-  const stats = useMemo(() => ({
-    total: requirements.length,
-    active: requirements.filter((r) => r.status === 'ACTIVE').length,
-    onHold: requirements.filter((r) => r.status === 'ON_HOLD').length,
-    stalled: requirements.filter((r) => r.stalled).length,
-    filled: requirements.filter((r) => ['CLOSED_HIRED', 'OFFER'].includes(r.status)).length,
-    totalSubmissions: requirements.reduce((acc, r) => acc + r.submissions, 0),
-    totalInterviews: requirements.reduce((acc, r) => acc + r.interviews, 0),
-  }), [requirements])
+  const stats = useMemo(() => {
+    return requirements.reduce(
+      (acc, requirement) => {
+        acc.total += 1
+        if (requirement.status === 'ACTIVE') acc.active += 1
+        if (requirement.status === 'ON_HOLD') acc.onHold += 1
+        if (requirement.stalled) acc.stalled += 1
+        if (requirement.status === 'CLOSED_HIRED' || requirement.status === 'OFFER') acc.filled += 1
+        acc.totalSubmissions += requirement.submissions
+        acc.totalInterviews += requirement.interviews
+        return acc
+      },
+      {
+        total: 0,
+        active: 0,
+        onHold: 0,
+        stalled: 0,
+        filled: 0,
+        totalSubmissions: 0,
+        totalInterviews: 0,
+      }
+    )
+  }, [requirements])
 
   // Handlers
   const handleView = (requirement: Requirement) => {
     setSelectedRequirement(requirement)
     setIsViewDrawerOpen(true)
+    setQueryParam('view', requirement.id)
   }
 
   const handleEdit = (requirement: Requirement) => {
@@ -742,12 +1288,12 @@ export default function RequirementsPage() {
       locationType: requirement.locationType,
       status: requirement.status,
       priority: requirement.priority,
-      owner: requirement.owner,
+      group: requirement.group || defaultGroup,
       budget: requirement.budget ? requirement.budget.replace(/\$/g, '₹') : '',
       openings: requirement.openings,
       filledPositions: requirement.filledPositions,
-      submissions: requirement.submissions,
-      interviews: requirement.interviews,
+      experienceMin: requirement.experienceMin,
+      experienceMax: requirement.experienceMax,
       skills: requirement.skills.join(', '),
       deadline: requirement.deadline || '',
       description: requirement.description || '',
@@ -772,7 +1318,7 @@ export default function RequirementsPage() {
       return
     }
     if (selectedRequirement) {
-      const res = await deleteRequirement(selectedRequirement.id)
+      const res = await deleteRequirementAction({ id: selectedRequirement.id })
       if (res.success) {
         setRequirements((prev) => prev.filter((r) => r.id !== selectedRequirement.id))
         toast.success('Requirement Deleted', `${selectedRequirement.mmdId} has been removed`)
@@ -792,7 +1338,10 @@ export default function RequirementsPage() {
     }
 
     const comment = window.prompt('Add a note for putting this requirement on hold (optional)') || undefined
-    const res = await freezeRequirement(requirement.id, comment)
+    const res = await freezeRequirementAction({
+      requirementId: requirement.id,
+      comment,
+    })
     if (res.success) {
       setRequirements((prev) => prev.map((r) => r.id === requirement.id ? { ...r, status: 'ON_HOLD', stalled: false } : r))
       toast.success('Requirement On Hold', `${requirement.mmdId} has been moved to On Hold`)
@@ -812,7 +1361,11 @@ export default function RequirementsPage() {
     if (!newOwnerId || !newOwnerId.trim()) return
     const comment = window.prompt('Add a note for this reassignment (optional)') || undefined
 
-    const res = await reassignRequirement(requirement.id, newOwnerId.trim(), comment)
+    const res = await reassignRequirementAction({
+      requirementId: requirement.id,
+      newOwnerId: newOwnerId.trim(),
+      comment,
+    })
     if (res.success) {
       toast.success('Requirement Reassigned', `${requirement.mmdId} reassigned successfully`)
       fetchData()
@@ -821,11 +1374,16 @@ export default function RequirementsPage() {
     }
   }
 
-  const openAddModal = () => {
+  const openAddModal = async () => {
     if (!canCreate) {
       toast.error('Forbidden', 'Only admins or coordinators can create requirements')
       return
     }
+
+    if (companies.length === 0 && !isLoadingCompanies) {
+      await fetchCompanies()
+    }
+
     resetForm()
     setIsAddModalOpen(true)
   }
@@ -845,43 +1403,108 @@ export default function RequirementsPage() {
       return
     }
 
+    if (!formState.companyId) {
+      toast.error('Missing company', 'Please select a company')
+      return
+    }
+
+    const selectedCompany = companies.find((company) => company._id === formState.companyId)
+    if (!selectedCompany) {
+      toast.error('Invalid company', 'The selected company could not be found')
+      return
+    }
+
+    const existingRequirement = editingId ? requirements.find((requirement) => requirement.id === editingId) : null
+
+    if (formState.experienceMin >= formState.experienceMax) {
+      toast.error('Invalid experience range', 'Minimum experience must be less than maximum experience')
+      return
+    }
+
     const skillsArray = formState.skills
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
 
-    const payload = {
+    const statusToSave = formState.status as 'PENDING_INTAKE' | 'AWAITING_JD' | 'ACTIVE' | 'SOURCING' | 'INTERVIEWING' | 'OFFER' | 'CLOSED_HIRED' | 'CLOSED_NOT_HIRED' | 'ON_HOLD'
+    const budgetRange = parseBudgetRange(formState.budget || '')
+    const fullDescription = buildRequirementDescription({
       title: formState.title,
-      mmdId: formState.mmdId,
-      status: formState.status,
-      priority: formState.priority,
+      company: formState.company || selectedCompany.name,
       location: formState.location || 'Remote',
-      locationType: formState.locationType,
-      company: formState.company || 'Unassigned',
-      companyId: formState.companyId || 'NA',
       budget: formState.budget || '',
-      openings: Number(formState.openings),
       skills: skillsArray,
       description: formState.description,
-      deadline: formState.deadline
+    })
+
+    const updatePayload = {
+      id: editingId || '',
+      companyId: formState.companyId,
+      jobTitle: formState.title,
+      fullDescription,
+      skills: skillsArray.length > 0 ? skillsArray : ['General hiring'],
+      experienceMin: Number(formState.experienceMin),
+      experienceMax: Number(formState.experienceMax),
+      openings: Number(formState.openings),
+      workMode: parseWorkMode(formState.locationType),
+      location: formState.location || 'Remote',
+      interviewClosingDate: formState.deadline ? new Date(formState.deadline) : undefined,
+      priority: formState.priority as 'High' | 'Medium' | 'Low',
+      group: formState.group,
+      ...budgetRange,
+    }
+
+    const createPayload = {
+      companyId: formState.companyId,
+      jobTitle: formState.title,
+      fullDescription,
+      skills: skillsArray.length > 0 ? skillsArray : ['General hiring'],
+      experienceMin: Number(formState.experienceMin),
+      experienceMax: Number(formState.experienceMax),
+      openings: Number(formState.openings),
+      workMode: parseWorkMode(formState.locationType),
+      location: formState.location || 'Remote',
+      interviewClosingDate: formState.deadline ? new Date(formState.deadline) : undefined,
+      priority: formState.priority as 'High' | 'Medium' | 'Low',
+      group: formState.group,
+      accountOwnerId: session?.user?.id || '',
+      status: statusToSave,
+      ...budgetRange,
     }
 
     if (editingId) {
-      const res = await updateRequirement(editingId, payload)
+      const currentStatus = existingRequirement?.status
+      const statusChanged = Boolean(currentStatus && currentStatus !== statusToSave)
+
+      const res = await updateRequirementAction(updatePayload)
       if (res.success) {
-        setRequirements((prev) =>
-          prev.map((r) => r.id === editingId ? { ...r, ...res.data } : r)
-        )
+        if (statusChanged) {
+          const statusRes = await updateRequirementStatusAction({
+            requirementId: editingId,
+            status: statusToSave,
+            comment: `Status updated from ${currentStatus} to ${statusToSave}`,
+          })
+
+          if (!statusRes.success) {
+            toast.error('Partial Update', statusRes.error || 'Requirement details saved but status update failed')
+            fetchData()
+            setIsAddModalOpen(false)
+            resetForm()
+            return
+          }
+        }
+
         toast.success('Requirement Updated', 'Changes saved successfully')
         fetchData()
       } else {
         toast.error('Error', res.error || 'Failed to update requirement')
       }
     } else {
-      const res = await createRequirement(payload)
+      const res = await createRequirementAction(createPayload)
       if (res.success) {
-        setRequirements((prev) => [res.data, ...prev])
-        toast.success('Requirement Created', 'New requirement added successfully')
+        const createdMmdId = (res.data as { mmdId?: string } | undefined)?.mmdId
+        toast.success('Requirement Created', `${createdMmdId || 'New requirement'} added successfully`)
+        fetchData()
       } else {
         toast.error('Error', res.error || 'Failed to create requirement')
       }
@@ -899,6 +1522,7 @@ export default function RequirementsPage() {
     })
     if (res.success) {
       toast.success('Export Started', 'You will be notified when it is ready')
+      loadExportJobs()
     } else {
       toast.error('Export Failed', res.error || 'Could not start export')
     }
@@ -955,30 +1579,63 @@ export default function RequirementsPage() {
         ))}
       </div>
 
+      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 shadow-lg shadow-slate-200/50 dark:shadow-black/20 p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Recent Requirement Exports</p>
+          <Button variant="ghost" size="sm" onClick={loadExportJobs}>Refresh</Button>
+        </div>
+        {isLoadingExportJobs && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading export jobs...</p>
+        )}
+        {!isLoadingExportJobs && exportJobs.length === 0 && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No export jobs yet.</p>
+        )}
+        {!isLoadingExportJobs && exportJobs.length > 0 && (
+          <div className="space-y-2">
+            {exportJobs.map((job) => (
+              <div key={job._id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{job._id}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{job.createdAt ? new Date(job.createdAt).toLocaleString('en-US') : 'Unknown time'} • {job.format}</p>
+                </div>
+                <div className="text-right">
+                  <p className={cn(
+                    'text-xs font-semibold',
+                    job.status === 'COMPLETED' && 'text-emerald-600',
+                    job.status === 'FAILED' && 'text-rose-600',
+                    (job.status === 'PENDING' || job.status === 'PROCESSING') && 'text-amber-600'
+                  )}>
+                    {job.status}
+                  </p>
+                  {job.status === 'COMPLETED' && job.fileUrl && (
+                    <a href={job.fileUrl} className="text-xs text-indigo-600 hover:underline" target="_blank" rel="noopener noreferrer">Download</a>
+                  )}
+                  {job.status === 'FAILED' && job.errorMessage && (
+                    <p className="text-xs text-rose-600 truncate max-w-48">{job.errorMessage}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Filters Bar */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 rounded-2xl border border-white/20 dark:border-slate-700/50 shadow-lg shadow-slate-200/50 dark:shadow-black/20">
         <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full md:w-auto">
           <div className="relative">
             <SearchInput
               placeholder="Search requirements..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClear={() => setSearchQuery('')}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onClear={() => setSearchInput('')}
               className="sm:w-80 shadow-sm border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 rounded-xl"
             />
           </div>
           <Select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            options={[
-              { value: 'all', label: 'All Statuses' },
-              { value: 'ACTIVE', label: 'Active' },
-              { value: 'ON_HOLD', label: 'On Hold' },
-              { value: 'STALLED', label: 'Stalled (idle)' },
-              { value: 'FILLED', label: 'Filled' },
-              { value: 'CLOSED_HIRED', label: 'Closed' },
-              { value: 'CANCELLED', label: 'Cancelled' },
-            ]}
+            options={REQUIREMENT_FILTER_STATUS_OPTIONS}
             className="sm:w-48 shadow-sm border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 rounded-xl"
           />
           <Select
@@ -1012,7 +1669,7 @@ export default function RequirementsPage() {
       {/* Results Count */}
       <div className="flex items-center justify-between px-2">
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-          Showing <span className="font-bold text-slate-900 dark:text-white">{filteredRequirements.length}</span> of {requirements.length} requirements
+          Showing <span className="font-bold text-slate-900 dark:text-white">{currentRangeStart}-{currentRangeEnd}</span> of {totalFilteredRequirements} matching requirements ({requirements.length} total)
         </p>
       </div>
 
@@ -1032,23 +1689,48 @@ export default function RequirementsPage() {
 
         if (filteredRequirements.length > 0) {
           return (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredRequirements.map((requirement) => (
-                <RequirementCard
-                  key={requirement.id}
-                  requirement={requirement}
-                  onView={() => handleView(requirement)}
-                  onEdit={() => handleEdit(requirement)}
-                  onDelete={() => handleDelete(requirement)}
-                  onFreeze={() => handleFreeze(requirement)}
-                  onReassign={() => handleReassign(requirement)}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                  canFreeze={canEdit && requirement.status !== 'ON_HOLD'}
-                  canReassign={canEdit}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {paginatedRequirements.map((requirement) => (
+                  <RequirementCard
+                    key={requirement.id}
+                    requirement={requirement}
+                    onView={() => handleView(requirement)}
+                    onEdit={() => handleEdit(requirement)}
+                    onDelete={() => handleDelete(requirement)}
+                    onFreeze={() => handleFreeze(requirement)}
+                    onReassign={() => handleReassign(requirement)}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                    canFreeze={canEdit && requirement.status !== 'ON_HOLD'}
+                    canReassign={canEdit}
+                  />
+                ))}
+              </div>
+              {totalFilteredRequirements > REQUIREMENTS_PAGE_SIZE && (
+                <div className="mt-6 flex items-center justify-center gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((current) => Math.max(1, current - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )
         }
 
@@ -1059,11 +1741,11 @@ export default function RequirementsPage() {
             </div>
             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No requirements found</h3>
             <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-8">
-              {searchQuery || filterStatus !== 'all' || filterPriority !== 'all'
+              {searchInput || filterStatus !== 'all' || filterPriority !== 'all'
                 ? 'Try adjusting your filters or search query'
                 : 'Get started by creating your first requirement'}
             </p>
-            {canCreate && !searchQuery && filterStatus === 'all' && filterPriority === 'all' && (
+            {canCreate && !searchInput && filterStatus === 'all' && filterPriority === 'all' && (
               <Button variant="gradient" leftIcon={<Plus className="w-4 h-4" />} onClick={openAddModal}>
                 Add Requirement
               </Button>
@@ -1076,7 +1758,7 @@ export default function RequirementsPage() {
       <RequirementDrawer
         requirement={selectedRequirement}
         isOpen={isViewDrawerOpen}
-        onClose={() => setIsViewDrawerOpen(false)}
+        onClose={closeViewDrawer}
       />
 
       {/* Delete Confirmation */}
@@ -1115,8 +1797,9 @@ export default function RequirementsPage() {
                 label="Company"
                 placeholder="Select a company"
                 searchPlaceholder="Search companies..."
-                emptyMessage="No companies found"
+                emptyMessage={isLoadingCompanies ? 'Loading companies...' : 'No companies found'}
                 value={formState.companyId}
+                disabled={isLoadingCompanies}
                 onChange={(companyId) => {
                   const selectedCompany = companies.find((c) => c._id === companyId)
                   setFormState((s) => ({
@@ -1126,13 +1809,40 @@ export default function RequirementsPage() {
                     location: selectedCompany?.location || s.location,
                   }))
                 }}
-                options={companies.map((company) => ({
-                  value: company._id,
-                  label: company.name,
-                  subtitle: company.location || 'No location specified',
-                }))}
+                options={selectableCompanies.map((company) => {
+                  const eligibility = getRequirementMouEligibility(company)
+                  return {
+                    value: company._id,
+                    label: company.name,
+                    subtitle: `${company.location || 'No location specified'} - ${getRequirementMouSubtitle(company, eligibility)}`,
+                  }
+                })}
                 className="w-full"
               />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">All companies are listed. MOU status is shown for reference; validation is temporarily disabled for manual testing.</p>
+              {!isLoadingCompanies && companies.length > 0 && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  MOU signed (status): {mouSummary.signed} | Eligible for requirements: {mouSummary.activeSigned}
+                </p>
+              )}
+              {isLoadingCompanies && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Loading companies...</p>
+              )}
+              {!isLoadingCompanies && companiesLoadError && (
+                <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                  {companiesLoadError}{' '}
+                  <button
+                    type="button"
+                    onClick={() => { void fetchCompanies() }}
+                    className="font-semibold underline underline-offset-2 hover:no-underline"
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
+              {!isLoadingCompanies && companies.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">No companies are available yet. Add a company first in Companies.</p>
+              )}
             </div>
             <div>
               <label htmlFor="req-priority" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
@@ -1194,13 +1904,7 @@ export default function RequirementsPage() {
               <Select
                 value={formState.status}
                 onChange={(e) => setFormState((s) => ({ ...s, status: e.target.value }))}
-                options={[
-                  { value: 'ACTIVE', label: 'Active' },
-                  { value: 'ON_HOLD', label: 'On Hold' },
-                  { value: 'FILLED', label: 'Filled' },
-                  { value: 'CLOSED_HIRED', label: 'Closed' },
-                  { value: 'CANCELLED', label: 'Cancelled' }
-                ]}
+                options={REQUIREMENT_STATUS_OPTIONS}
                 className="w-full"
               />
             </div>
@@ -1218,24 +1922,28 @@ export default function RequirementsPage() {
               />
             </div>
             <div>
-              <label htmlFor="req-owner" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Owner</label>
-              <input
-                id="req-owner"
-                className="input-modern w-full"
-                placeholder="e.g., Priya Patel"
-                value={formState.owner}
-                onChange={(e) => setFormState((s) => ({ ...s, owner: e.target.value }))}
+              <label htmlFor="req-group" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Assignment Group</label>
+              <Select
+                value={formState.group}
+                onChange={(e) => setFormState((s) => ({ ...s, group: e.target.value as Requirement['group'] }))}
+                options={[
+                  { value: 'RASHMI', label: 'Rashmi' },
+                  { value: 'MANJUNATH', label: 'Manjunath' },
+                  { value: 'SCRAPING', label: 'Scraping' },
+                  { value: 'LEADS', label: 'Leads' }
+                ]}
+                className="w-full"
               />
             </div>
             <div>
-              <label htmlFor="req-mmd" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">MMD ID</label>
+              <label htmlFor="req-mmd" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Requirement ID</label>
               <input
                 id="req-mmd"
                 className="input-modern w-full"
-                placeholder="MMD-R-1056"
-                value={formState.mmdId}
-                onChange={(e) => setFormState((s) => ({ ...s, mmdId: e.target.value }))}
+                value={requirementIdPreview}
+                readOnly
               />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Generated automatically in the `REQ-YY-SECTOR-###` format.</p>
             </div>
             <div>
               <label htmlFor="req-skills" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills (comma separated)</label>
@@ -1248,25 +1956,25 @@ export default function RequirementsPage() {
               />
             </div>
             <div>
-              <label htmlFor="req-submissions" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Submissions</label>
+              <label htmlFor="req-exp-min" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Min Experience (Years)</label>
               <input
-                id="req-submissions"
+                id="req-exp-min"
                 className="input-modern w-full"
                 type="number"
                 min="0"
-                value={formState.submissions}
-                onChange={(e) => setFormState((s) => ({ ...s, submissions: Number(e.target.value) }))}
+                value={formState.experienceMin}
+                onChange={(e) => setFormState((s) => ({ ...s, experienceMin: Number(e.target.value) }))}
               />
             </div>
             <div>
-              <label htmlFor="req-interviews" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Interviews</label>
+              <label htmlFor="req-exp-max" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Experience (Years)</label>
               <input
-                id="req-interviews"
+                id="req-exp-max"
                 className="input-modern w-full"
                 type="number"
-                min="0"
-                value={formState.interviews}
-                onChange={(e) => setFormState((s) => ({ ...s, interviews: Number(e.target.value) }))}
+                min="1"
+                value={formState.experienceMax}
+                onChange={(e) => setFormState((s) => ({ ...s, experienceMax: Number(e.target.value) }))}
               />
             </div>
             <div className="md:col-span-2">
